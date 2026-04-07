@@ -6,31 +6,34 @@ BluetoothSerial SerialBT;
 // =========================
 // Stepper config
 // =========================
-const int NUM_DRIVERS = 5;
+const int NUM_DRIVERS = 6;
 
-const int STEP_PINS[NUM_DRIVERS] = {25, 33, 32, 27, 26};
-const int DIR_PINS[NUM_DRIVERS]  = {13, 14, 22, 21, 23};
+const int STEP_PINS[NUM_DRIVERS] = {25, 33, 32, 27, 26, 4};
+const int DIR_PINS[NUM_DRIVERS]  = {13, 14, 22, 21, 23, 15};
 
 int pulseDelayUs = 1000;
 
-// Updated stage notation:
-// Stage 1 = turntable (not assigned here yet)
-// Stage 2 = two-motor base lift
-// Stage 3 = next stage
-// Stage 4 = next stage (sensor exists, motor not assigned here yet)
-// Stage 5 = controller 5
+// Stage-to-controller mapping:
+// Stage 1 = turntable          -> controller 6 (index 5)
+// Stage 2 = base lift pair     -> controllers 1+4 (index 0+3)
+// Stage 3 = arm segment        -> controller 2 (index 1)
+// Stage 4 = arm segment        -> controller 3 (index 2)
+// Stage 5 = wrist              -> controller 5 (index 4)
 
+const int STAGE1       = 5;   // controller 6
 const int STAGE2_RIGHT = 0;   // controller 1
 const int STAGE3       = 1;   // controller 2
+const int STAGE4       = 2;   // controller 3
 const int STAGE2_LEFT  = 3;   // controller 4
 const int STAGE5       = 4;   // controller 5
 
 bool invertMotor[NUM_DRIVERS] = {
   false, // controller 1 / stage 2 right
   false, // controller 2 / stage 3
-  false, // controller 3 / unassigned
+  false, // controller 3 / stage 4
   true,  // controller 4 / stage 2 left
-  false  // controller 5 / stage 5
+  false, // controller 5 / stage 5
+  false  // controller 6 / stage 1 (turntable)
 };
 
 // =========================
@@ -135,18 +138,10 @@ void serviceSensorUART() {
 // =========================
 // Direction-aware limit logic
 //
-// Stage 2:
-//   s2up   -> forward = true
-//   s2down -> forward = false
-//   Only DOWN should be blocked => block when forward == false
-//
-// Stage 3:
-//   s3down -> forward = true
-//   s3up   -> forward = false
-//   Only DOWN should be blocked => block when forward == true
-//
-// Stage 5:
-//   no limit mapped yet
+// Stage 2:  s2down -> forward=false (blocked by limit)
+// Stage 3:  s3down -> forward=true  (blocked by limit)
+// Stage 4:  s4down -> forward=true  (blocked by limit)
+// Stage 1, 5: no limit switches
 // =========================
 bool shouldStopMotor(int motorIndex, bool forward) {
   if (motorIndex == STAGE2_RIGHT || motorIndex == STAGE2_LEFT) {
@@ -157,6 +152,11 @@ bool shouldStopMotor(int motorIndex, bool forward) {
   if (motorIndex == STAGE3) {
     bool movingDown = forward;
     return stage3LimitHit && movingDown;
+  }
+
+  if (motorIndex == STAGE4) {
+    bool movingDown = forward;
+    return stage4LimitHit && movingDown;
   }
 
   return false;
@@ -254,15 +254,202 @@ void runControllerCommand(int controllerNum, bool forward, int steps) {
   }
 }
 
+// =========================
+// Sequential / parallel execution
+//
+// MotorMove holds a single motor's move parameters.
+// Stage 2 expands to two MotorMove entries (RIGHT + LEFT).
+// =========================
+struct MotorMove {
+  int  motorIndex;
+  bool forward;
+  int  stepsRemaining;
+};
+
+// Translate one stage/controller command string into MotorMove entries.
+// Returns number of entries written (0 = unrecognised or bad step count).
+int resolveToMoves(String cmd, MotorMove *moves, int maxMoves) {
+  cmd.trim();
+  cmd.toLowerCase();
+
+  int steps = 0;
+  int spPos = cmd.lastIndexOf(' ');
+  if (spPos > 0) steps = cmd.substring(spPos + 1).toInt();
+  if (steps <= 0) return 0;
+
+  // Stage 1 — turntable
+  if (cmd.startsWith("s1cw "))  { moves[0] = {STAGE1, true,  steps}; return 1; }
+  if (cmd.startsWith("s1ccw ")) { moves[0] = {STAGE1, false, steps}; return 1; }
+
+  // Stage 2 — paired motors
+  if (cmd.startsWith("s2up ")) {
+    if (maxMoves < 2) return 0;
+    moves[0] = {STAGE2_RIGHT, true, steps};
+    moves[1] = {STAGE2_LEFT,  true, steps};
+    return 2;
+  }
+  if (cmd.startsWith("s2down ")) {
+    if (maxMoves < 2) return 0;
+    moves[0] = {STAGE2_RIGHT, false, steps};
+    moves[1] = {STAGE2_LEFT,  false, steps};
+    return 2;
+  }
+
+  // Stage 3
+  if (cmd.startsWith("s3up "))   { moves[0] = {STAGE3, false, steps}; return 1; }
+  if (cmd.startsWith("s3down ")) { moves[0] = {STAGE3, true,  steps}; return 1; }
+
+  // Stage 4
+  if (cmd.startsWith("s4up "))   { moves[0] = {STAGE4, false, steps}; return 1; }
+  if (cmd.startsWith("s4down ")) { moves[0] = {STAGE4, true,  steps}; return 1; }
+
+  // Stage 5
+  if (cmd.startsWith("s5cw "))   { moves[0] = {STAGE5, false, steps}; return 1; }
+  if (cmd.startsWith("s5ccw "))  { moves[0] = {STAGE5, true,  steps}; return 1; }
+
+  // Raw controller: cXf / cXr
+  if (cmd.length() >= 5 && cmd.charAt(0) == 'c') {
+    int num     = cmd.charAt(1) - '0';
+    char dirCh  = cmd.charAt(2);
+    if (num >= 1 && num <= 6 && (dirCh == 'f' || dirCh == 'r')) {
+      moves[0] = {num - 1, dirCh == 'f', steps};
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+// Step multiple motors in parallel.
+// Each motor is pulsed on the same clock tick; motors with fewer steps
+// finish early while the others keep running. Limits are checked per-motor
+// every iteration.
+bool stepMultiple(MotorMove *moves, int count) {
+  // Pre-flight limit check
+  for (int i = 0; i < count; i++) {
+    if (shouldStopMotor(moves[i].motorIndex, moves[i].forward)) {
+      printlnBoth("PAR ABORT: limit active for controller " +
+                  String(moves[i].motorIndex + 1));
+      return false;
+    }
+  }
+
+  // Set all directions before any stepping starts
+  for (int i = 0; i < count; i++) {
+    setDirection(moves[i].motorIndex, moves[i].forward);
+  }
+
+  while (true) {
+    serviceSensorUART();
+
+    // Check limits and count still-active motors
+    int active = 0;
+    for (int i = 0; i < count; i++) {
+      if (moves[i].stepsRemaining <= 0) continue;
+      if (shouldStopMotor(moves[i].motorIndex, moves[i].forward)) {
+        printlnBoth("PAR STOP: limit hit on controller " +
+                    String(moves[i].motorIndex + 1));
+        moves[i].stepsRemaining = 0;
+        continue;
+      }
+      active++;
+    }
+    if (active == 0) break;
+
+    // Pulse HIGH for all active motors
+    for (int i = 0; i < count; i++) {
+      if (moves[i].stepsRemaining > 0)
+        digitalWrite(STEP_PINS[moves[i].motorIndex], HIGH);
+    }
+    delayMicroseconds(pulseDelayUs);
+
+    // Pulse LOW and decrement
+    for (int i = 0; i < count; i++) {
+      if (moves[i].stepsRemaining > 0) {
+        digitalWrite(STEP_PINS[moves[i].motorIndex], LOW);
+        moves[i].stepsRemaining--;
+      }
+    }
+    delayMicroseconds(pulseDelayUs);
+  }
+
+  return true;
+}
+
+// Forward declaration so runSequential can call handleCommand
+void handleCommand(String cmd);
+
+// Split cmdList by ',' and execute each sub-command in order.
+// Any command type (motor, MOSFET, utility) is supported.
+void runSequential(const String &cmdList) {
+  int start = 0;
+  int idx   = 0;
+  while (start < (int)cmdList.length()) {
+    int comma = cmdList.indexOf(',', start);
+    String sub = (comma < 0)
+                   ? cmdList.substring(start)
+                   : cmdList.substring(start, comma);
+    sub.trim();
+    if (sub.length() > 0) {
+      printlnBoth("SEQ[" + String(idx++) + "]: " + sub);
+      handleCommand(sub);
+    }
+    if (comma < 0) break;
+    start = comma + 1;
+  }
+  printlnBoth("SEQ: done");
+}
+
+// Split cmdList by ',', resolve each to motor moves, run all simultaneously.
+// Only motor/stage commands are supported in parallel mode.
+void runParallel(const String &cmdList) {
+  // Max 12 moves: up to 6 commands, stage2 counts as 2
+  MotorMove moves[12];
+  int totalMoves = 0;
+
+  int start = 0;
+  while (start < (int)cmdList.length()) {
+    int comma = cmdList.indexOf(',', start);
+    String sub = (comma < 0)
+                   ? cmdList.substring(start)
+                   : cmdList.substring(start, comma);
+    sub.trim();
+
+    if (sub.length() > 0) {
+      int added = resolveToMoves(sub, moves + totalMoves, 12 - totalMoves);
+      if (added == 0) {
+        printlnBoth("PAR: unrecognised motor command: " + sub);
+        return;
+      }
+      totalMoves += added;
+    }
+
+    if (comma < 0) break;
+    start = comma + 1;
+  }
+
+  if (totalMoves == 0) {
+    printlnBoth("PAR: no valid motor commands");
+    return;
+  }
+
+  bool ok = stepMultiple(moves, totalMoves);
+  printlnBoth(ok ? "PAR: done" : "PAR: aborted");
+}
+
 void printHelp() {
   printlnBoth("");
   printlnBoth("Stage commands:");
+  printlnBoth("  s1cw 400      -> stage 1 (turntable) clockwise");
+  printlnBoth("  s1ccw 400     -> stage 1 (turntable) counter-clockwise");
   printlnBoth("  s2up 400      -> stage 2 up 400 steps");
   printlnBoth("  s2down 400    -> stage 2 down 400 steps");
   printlnBoth("  s3up 400      -> stage 3 up 400 steps");
   printlnBoth("  s3down 400    -> stage 3 down 400 steps");
+  printlnBoth("  s4up 400      -> stage 4 up 400 steps");
+  printlnBoth("  s4down 400    -> stage 4 down 400 steps");
   printlnBoth("  s5cw 400      -> stage 5 clockwise 400 steps");
-  printlnBoth("  s5ccw 400    -> stage 5 counter-clockwise 400 steps");
+  printlnBoth("  s5ccw 400     -> stage 5 counter-clockwise 400 steps");
   printlnBoth("");
 
   printlnBoth("Controller commands (raw):");
@@ -270,10 +457,20 @@ void printHelp() {
   printlnBoth("  c1r 400       -> controller 1 reverse 400 steps");
   printlnBoth("  c2f 400       -> controller 2 forward 400 steps");
   printlnBoth("  c2r 400       -> controller 2 reverse 400 steps");
+  printlnBoth("  c3f 400       -> controller 3 forward 400 steps");
+  printlnBoth("  c3r 400       -> controller 3 reverse 400 steps");
   printlnBoth("  c4f 400       -> controller 4 forward 400 steps");
   printlnBoth("  c4r 400       -> controller 4 reverse 400 steps");
   printlnBoth("  c5f 400       -> controller 5 forward 400 steps");
   printlnBoth("  c5r 400       -> controller 5 reverse 400 steps");
+  printlnBoth("  c6f 400       -> controller 6 forward 400 steps");
+  printlnBoth("  c6r 400       -> controller 6 reverse 400 steps");
+  printlnBoth("");
+
+  printlnBoth("Sequence commands:");
+  printlnBoth("  seq s2up 400, s3down 200, mag on   -> run in order");
+  printlnBoth("  par s2up 400, s5cw 200             -> run simultaneously");
+  printlnBoth("  (par supports motor/stage commands only)");
   printlnBoth("");
 
   printlnBoth("Other:");
@@ -317,6 +514,16 @@ void handleCommand(String cmd) {
     return;
   }
 
+  if (cmd.startsWith("seq ")) {
+    runSequential(cmd.substring(4));
+    return;
+  }
+
+  if (cmd.startsWith("par ")) {
+    runParallel(cmd.substring(4));
+    return;
+  }
+
   if (cmd.startsWith("speed ")) {
     int newDelay = cmd.substring(6).toInt();
     if (newDelay >= 100) {
@@ -324,6 +531,29 @@ void handleCommand(String cmd) {
       printlnBoth("Pulse delay set to " + String(pulseDelayUs) + " us");
     } else {
       printlnBoth("Use a value >= 100");
+    }
+    return;
+  }
+
+  // Stage 1 (turntable)
+  if (cmd.startsWith("s1cw ")) {
+    int steps = cmd.substring(5).toInt();
+    if (steps > 0) {
+      bool ok = stepMotor(STAGE1, true, steps);
+      printlnBoth(ok ? "Stage 1 CW done" : "Stage 1 CW aborted");
+    } else {
+      printlnBoth("Invalid step count");
+    }
+    return;
+  }
+
+  if (cmd.startsWith("s1ccw ")) {
+    int steps = cmd.substring(6).toInt();
+    if (steps > 0) {
+      bool ok = stepMotor(STAGE1, false, steps);
+      printlnBoth(ok ? "Stage 1 CCW done" : "Stage 1 CCW aborted");
+    } else {
+      printlnBoth("Invalid step count");
     }
     return;
   }
@@ -374,6 +604,29 @@ void handleCommand(String cmd) {
     return;
   }
 
+  // Stage 4
+  if (cmd.startsWith("s4up ")) {
+    int steps = cmd.substring(5).toInt();
+    if (steps > 0) {
+      bool ok = stepMotor(STAGE4, false, steps);
+      printlnBoth(ok ? "Stage 4 up done" : "Stage 4 up aborted");
+    } else {
+      printlnBoth("Invalid step count");
+    }
+    return;
+  }
+
+  if (cmd.startsWith("s4down ")) {
+    int steps = cmd.substring(7).toInt();
+    if (steps > 0) {
+      bool ok = stepMotor(STAGE4, true, steps);
+      printlnBoth(ok ? "Stage 4 down done" : "Stage 4 down aborted");
+    } else {
+      printlnBoth("Invalid step count");
+    }
+    return;
+  }
+
   // Stage 5
   if (cmd.startsWith("s5ccw ")) {
     int steps = cmd.substring(6).toInt();
@@ -403,7 +656,7 @@ void handleCommand(String cmd) {
     char dirChar = cmd.charAt(2);
     int spacePos = cmd.indexOf(' ');
 
-    if (controllerNum >= 1 && controllerNum <= 5 &&
+    if (controllerNum >= 1 && controllerNum <= 6 &&
         (dirChar == 'f' || dirChar == 'r') &&
         spacePos > 0) {
 

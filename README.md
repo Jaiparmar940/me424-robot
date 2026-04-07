@@ -22,7 +22,7 @@ The wrist uses an 8-pin magnetic connector to hot-swap tools.
 
 | Board | Role |
 |---|---|
-| **Main Board** | Master controller. Bluetooth serial interface, drives 5 stepper motors via TB6600 drivers, routes commands to other boards over UART. |
+| **Main Board** | Master controller. Bluetooth serial interface, drives 6 stepper motors via TB6600 drivers, routes commands to other boards over UART. |
 | **MOSFET Board** | Receives commands from Main Board over UART. Drives 3 MOSFET outputs for electromagnet, vacuum, and circular saw. Sends ACK responses. |
 | **Sensor Board** | Reads 3 limit switches and reports state changes to Main Board over UART. |
 
@@ -52,9 +52,10 @@ ME424_Robot/
 |---|---|---|---|---|
 | 1 | Stage 2 Right | GPIO 25 | GPIO 13 | No |
 | 2 | Stage 3 | GPIO 33 | GPIO 14 | No |
-| 3 | Unassigned | GPIO 32 | GPIO 22 | No |
+| 3 | Stage 4 | GPIO 32 | GPIO 22 | No |
 | 4 | Stage 2 Left | GPIO 27 | GPIO 21 | **Yes** |
 | 5 | Stage 5 | GPIO 26 | GPIO 23 | No |
+| 6 | Stage 1 (turntable) | GPIO 4 | GPIO 15 | No |
 
 Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has its direction inverted so both motors move the same physical direction.
 
@@ -130,10 +131,14 @@ Commands are sent to the Main Board over USB Serial or Bluetooth. Each command i
 
 | Command | Description |
 |---|---|
+| `s1cw <steps>` | Stage 1 (turntable) clockwise |
+| `s1ccw <steps>` | Stage 1 (turntable) counter-clockwise |
 | `s2up <steps>` | Stage 2 up (controllers 1 + 4 in sync, forward) |
 | `s2down <steps>` | Stage 2 down (controllers 1 + 4 in sync, reverse) |
 | `s3up <steps>` | Stage 3 up |
 | `s3down <steps>` | Stage 3 down |
+| `s4up <steps>` | Stage 4 up |
+| `s4down <steps>` | Stage 4 down |
 | `s5cw <steps>` | Stage 5 clockwise |
 | `s5ccw <steps>` | Stage 5 counter-clockwise |
 
@@ -141,11 +146,12 @@ Commands are sent to the Main Board over USB Serial or Bluetooth. Each command i
 
 | Command | Description |
 |---|---|
-| `c1f <steps>` / `c1r <steps>` | Controller 1 forward / reverse |
-| `c2f <steps>` / `c2r <steps>` | Controller 2 forward / reverse |
-| `c3f <steps>` / `c3r <steps>` | Controller 3 forward / reverse (unassigned motor) |
-| `c4f <steps>` / `c4r <steps>` | Controller 4 forward / reverse |
-| `c5f <steps>` / `c5r <steps>` | Controller 5 forward / reverse |
+| `c1f <steps>` / `c1r <steps>` | Controller 1 forward / reverse (Stage 2 Right) |
+| `c2f <steps>` / `c2r <steps>` | Controller 2 forward / reverse (Stage 3) |
+| `c3f <steps>` / `c3r <steps>` | Controller 3 forward / reverse (Stage 4) |
+| `c4f <steps>` / `c4r <steps>` | Controller 4 forward / reverse (Stage 2 Left) |
+| `c5f <steps>` / `c5r <steps>` | Controller 5 forward / reverse (Stage 5) |
+| `c6f <steps>` / `c6r <steps>` | Controller 6 forward / reverse (Stage 1 / turntable) |
 
 ### MOSFET / Tool Commands
 
@@ -158,6 +164,25 @@ These are forwarded from the Main Board to the MOSFET Board over UART.
 | `saw on` / `saw off` | `SAW ON` / `SAW OFF` | `ACK SAW ON` / `ACK SAW OFF` |
 | `alloff` | `ALL OFF` | `ACK ALL OFF` |
 | `mstatus` | `STATUS` | `STATUS MAG=ON/OFF VAC=ON/OFF SAW=ON/OFF` |
+
+### Sequence Commands
+
+Commands are separated by `,`. Whitespace around commas is ignored.
+
+| Command | Description |
+|---|---|
+| `seq <cmd1>, <cmd2>, ...` | Execute commands one at a time in order. Any command type is valid (motor, MOSFET, utility). |
+| `par <cmd1>, <cmd2>, ...` | Execute motor commands simultaneously. All specified motors are stepped on the same clock tick. Motor/stage commands only — MOSFET commands are not supported in `par`. |
+
+**Examples:**
+```
+seq s2up 400, s3down 200, mag on
+par s2up 400, s5cw 200
+par s3down 200, s4down 300, s1cw 100
+seq par s3down 400, s4down 400, s2up 200, mag on
+```
+
+In `par`, motors with different step counts run until each individually finishes — longer moves continue while shorter ones stop. Limits are checked per-motor on every step.
 
 ### Utility Commands
 
@@ -189,9 +214,11 @@ If a limit is already active when a command is received, the command is rejected
 
 | Stage | "Down" Direction | Limit Blocks |
 |---|---|---|
+| Stage 1 | — | No limit switch |
 | Stage 2 | `s2down` (forward = false) | Downward motion only |
 | Stage 3 | `s3down` (forward = true) | Downward motion only |
-| Stage 5 | — | No limit switch mapped |
+| Stage 4 | `s4down` (forward = true) | Downward motion only |
+| Stage 5 | — | No limit switch |
 
 ### Limit-to-Motor Mapping
 
@@ -199,7 +226,7 @@ If a limit is already active when a command is received, the command is rejected
 |---|---|
 | Stage 2 | Controllers 1 + 4 (stopped together) |
 | Stage 3 | Controller 2 |
-| Stage 4 | Monitored but no motor mapped |
+| Stage 4 | Controller 3 |
 
 ---
 
@@ -386,6 +413,5 @@ There is no strict order, but a practical sequence is:
 
 - [ ] Add tool identification via ADC voltage divider on the sensor board
 - [ ] Add linear probe (potentiometer) reading
-- [ ] Implement Stage 1 (turntable) and Stage 4 motor control
 - [ ] Add debouncing / filtering to limit switch reads
 - [ ] Add shared protocol header in `lib/` for message definitions
