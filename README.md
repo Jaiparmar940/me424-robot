@@ -23,7 +23,7 @@ The wrist uses an 8-pin magnetic connector to hot-swap tools.
 | Board | Role |
 |---|---|
 | **Main Board** | Master controller. Bluetooth serial interface, drives 5 stepper motors via TB6600 drivers, routes commands to other boards over UART. |
-| **MOSFET Board** | Receives commands from Main Board to switch high-current outputs (electromagnet, vacuum, saw). Firmware for this board is not yet implemented — only the Main Board side that sends commands to it exists. |
+| **MOSFET Board** | Receives commands from Main Board over UART. Drives 3 MOSFET outputs for electromagnet, vacuum, and circular saw. Sends ACK responses. |
 | **Sensor Board** | Reads 3 limit switches and reports state changes to Main Board over UART. |
 
 ## Project Structure
@@ -32,21 +32,19 @@ The wrist uses an 8-pin magnetic connector to hot-swap tools.
 ME424_Robot/
 ├── platformio.ini              Multi-environment build config
 ├── src/
-│   ├── main_board/main.cpp     Main board firmware (v1 — s2up/s2down commands)
-│   ├── mosfet_board/main.cpp   Main board firmware (v2 — s2f/s2r commands, lstatus)
+│   ├── main_board/main.cpp     Main board firmware
+│   ├── mosfet_board/main.cpp   MOSFET slave board firmware
 │   └── sensor_board/main.cpp   Sensor board firmware
 ├── include/                    Shared headers (empty, for future use)
 ├── lib/                        Shared libraries (empty, for future use)
 └── .gitignore
 ```
 
-> **Note:** `main_board` and `mosfet_board` are two variants of the master firmware, not two different boards. See [Firmware Variants](#firmware-variants) below.
-
 ---
 
 ## Pin Assignments
 
-### Main Board (both firmware variants)
+### Main Board
 
 #### Stepper Motor Outputs (to TB6600 drivers)
 
@@ -56,7 +54,7 @@ ME424_Robot/
 | 2 | Stage 3 | GPIO 33 | GPIO 14 | No |
 | 3 | Unassigned | GPIO 32 | GPIO 22 | No |
 | 4 | Stage 2 Left | GPIO 27 | GPIO 21 | **Yes** |
-| 5 | Stage 5 (v1 only) | GPIO 26 | GPIO 23 | No |
+| 5 | Stage 5 | GPIO 26 | GPIO 23 | No |
 
 Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has its direction inverted so both motors move the same physical direction.
 
@@ -64,7 +62,7 @@ Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has i
 
 | Bus | Function | Main Board Pin | Remote Board Pin | Baud |
 |---|---|---|---|---|
-| UART2 | To MOSFET board | RX = GPIO 16, TX = GPIO 17 | MOSFET RX / TX | 115200 |
+| UART2 | To MOSFET board | RX = GPIO 16, TX = GPIO 17 | MOSFET RX = GPIO 25, TX = GPIO 26 | 115200 |
 | UART1 | To Sensor board | RX = GPIO 18, TX = GPIO 19 | Sensor TX = GPIO 27, RX = GPIO 26 | 115200 |
 | UART0 | USB Serial (debug) | Default (GPIO 1 / 3) | — | 115200 |
 
@@ -73,6 +71,21 @@ Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has i
 | Function | Details |
 |---|---|
 | Bluetooth Classic | Advertises as `ESP32_STAGE_CTRL` at 115200 baud |
+
+---
+
+### MOSFET Board
+
+| Function | GPIO | Mode | Notes |
+|---|---|---|---|
+| Electromagnet output | 18 | OUTPUT | Active HIGH |
+| Vacuum output | 19 | OUTPUT | Active HIGH |
+| Saw output | 21 | OUTPUT | Active HIGH |
+| UART RX (from Main TX) | 25 | UART1 RX | Cross-wired to Main GPIO 17 |
+| UART TX (to Main RX) | 26 | UART1 TX | Cross-wired to Main GPIO 16 |
+| USB Serial (debug) | Default | UART0 | 115200 baud |
+
+All outputs default to LOW (off) on boot. The board sends `SLAVE READY` to the main board on startup.
 
 ---
 
@@ -89,33 +102,19 @@ Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has i
 
 ---
 
-### MOSFET Board
-
-The MOSFET board receives text commands over UART from the Main Board and toggles high-current outputs. **Its firmware is not yet written.** The Main Board sends it these commands:
-
-| Command | Expected Action |
-|---|---|
-| `MAG ON` / `MAG OFF` | Toggle electromagnet |
-| `VAC ON` / `VAC OFF` | Toggle vacuum |
-| `SAW ON` / `SAW OFF` | Toggle circular saw |
-| `ALL OFF` | All outputs off |
-| `STATUS` | Report current output states |
-
----
-
 ## UART Wiring Diagram
 
 ```
+Main Board                    MOSFET Board
+──────────                    ────────────
+GPIO 16 (RX2)  ◂──────────  GPIO 26 (TX1)
+GPIO 17 (TX2)  ──────────▸  GPIO 25 (RX1)
+GND            ──────────── GND
+
 Main Board                    Sensor Board
 ──────────                    ────────────
 GPIO 18 (RX1)  ◂──────────  GPIO 27 (TX1)
 GPIO 19 (TX1)  ──────────▸  GPIO 26 (RX1)
-GND            ──────────── GND
-
-Main Board                    MOSFET Board
-──────────                    ────────────
-GPIO 16 (RX2)  ◂──────────  TX
-GPIO 17 (TX2)  ──────────▸  RX
 GND            ──────────── GND
 ```
 
@@ -123,81 +122,50 @@ All UART buses run at **115200 baud, 8N1**.
 
 ---
 
-## Firmware Variants
-
-There are two versions of the master firmware in this repo. Both run on the same physical Main Board — pick one.
-
-| Feature | `main_board` (v1) | `mosfet_board` (v2) |
-|---|---|---|
-| Stage 2 commands | `s2up` / `s2down` | `s2f` / `s2r` |
-| Stage 3 commands | `s3up` / `s3down` | `s3f` / `s3r` |
-| Stage 5 support | Yes (`s5cw` / `s5ccw`) | No |
-| Direction-aware limits | Yes (only blocks downward) | No (blocks any direction if hit) |
-| `lstatus` command | No | Yes (requests fresh sensor data) |
-| Sensor polling | Inline during stepping (`serviceSensorUART`) | Polled each loop iteration |
-| MOSFET UART name | `SlaveSerial` | `MosfetSerial` |
-
----
-
 ## Command Reference
 
-Commands are case-insensitive and can be sent over USB Serial or Bluetooth. Each command is terminated by a newline (`\n`).
+Commands are sent to the Main Board over USB Serial or Bluetooth. Each command is case-insensitive and terminated by a newline (`\n`). Responses are echoed to both USB Serial and Bluetooth simultaneously.
 
 ### Stage Commands
 
-#### v1 (`main_board`)
-
 | Command | Description |
 |---|---|
-| `s2up <steps>` | Stage 2 up (both motors, forward) |
-| `s2down <steps>` | Stage 2 down (both motors, reverse) |
+| `s2up <steps>` | Stage 2 up (controllers 1 + 4 in sync, forward) |
+| `s2down <steps>` | Stage 2 down (controllers 1 + 4 in sync, reverse) |
 | `s3up <steps>` | Stage 3 up |
 | `s3down <steps>` | Stage 3 down |
 | `s5cw <steps>` | Stage 5 clockwise |
 | `s5ccw <steps>` | Stage 5 counter-clockwise |
 
-#### v2 (`mosfet_board`)
+### Raw Controller Commands
 
 | Command | Description |
 |---|---|
-| `s2f <steps>` | Stage 2 forward (both motors) |
-| `s2r <steps>` | Stage 2 reverse (both motors) |
-| `s3f <steps>` | Stage 3 forward |
-| `s3r <steps>` | Stage 3 reverse |
+| `c1f <steps>` / `c1r <steps>` | Controller 1 forward / reverse |
+| `c2f <steps>` / `c2r <steps>` | Controller 2 forward / reverse |
+| `c3f <steps>` / `c3r <steps>` | Controller 3 forward / reverse (unassigned motor) |
+| `c4f <steps>` / `c4r <steps>` | Controller 4 forward / reverse |
+| `c5f <steps>` / `c5r <steps>` | Controller 5 forward / reverse |
 
-### Raw Controller Commands (both versions)
+### MOSFET / Tool Commands
 
-| Command | Description |
-|---|---|
-| `c1f <steps>` | Controller 1 forward |
-| `c1r <steps>` | Controller 1 reverse |
-| `c2f <steps>` | Controller 2 forward |
-| `c2r <steps>` | Controller 2 reverse |
-| `c3f <steps>` | Controller 3 forward (unassigned motor) |
-| `c3r <steps>` | Controller 3 reverse |
-| `c4f <steps>` | Controller 4 forward |
-| `c4r <steps>` | Controller 4 reverse |
-| `c5f <steps>` | Controller 5 forward |
-| `c5r <steps>` | Controller 5 reverse |
+These are forwarded from the Main Board to the MOSFET Board over UART.
 
-### MOSFET / Tool Commands (both versions)
-
-| Command | Description |
-|---|---|
-| `mag on` / `mag off` | Electromagnet on/off |
-| `vac on` / `vac off` | Vacuum on/off |
-| `saw on` / `saw off` | Circular saw on/off |
-| `alloff` | All MOSFET outputs off |
-| `mstatus` | Request MOSFET board status |
+| Command | Forwarded As | MOSFET Board Response |
+|---|---|---|
+| `mag on` / `mag off` | `MAG ON` / `MAG OFF` | `ACK MAG ON` / `ACK MAG OFF` |
+| `vac on` / `vac off` | `VAC ON` / `VAC OFF` | `ACK VAC ON` / `ACK VAC OFF` |
+| `saw on` / `saw off` | `SAW ON` / `SAW OFF` | `ACK SAW ON` / `ACK SAW OFF` |
+| `alloff` | `ALL OFF` | `ACK ALL OFF` |
+| `mstatus` | `STATUS` | `STATUS MAG=ON/OFF VAC=ON/OFF SAW=ON/OFF` |
 
 ### Utility Commands
 
-| Command | v1 | v2 | Description |
-|---|---|---|---|
-| `speed <us>` | Yes | Yes | Set stepper pulse delay in microseconds (min 100) |
-| `limits` | Yes | Yes | Print last-known limit switch states |
-| `lstatus` | No | Yes | Request fresh status from sensor board |
-| `help` | Yes | Yes | Print command menu |
+| Command | Description |
+|---|---|
+| `speed <us>` | Set stepper pulse delay in microseconds (minimum 100) |
+| `limits` | Print last-known limit switch states |
+| `help` | Print command menu |
 
 ---
 
@@ -213,17 +181,25 @@ Where `1` = switch triggered (pressed), `0` = switch open.
 
 ### Behavior
 
-- **v1 (`main_board`):** Direction-aware. Only blocks motion in the *downward* direction for a given stage. Upward motion is always allowed even if the limit is triggered. The sensor UART is polled mid-step so limits are respected during long moves.
-- **v2 (`mosfet_board`):** Blocks motion in *any* direction when a limit is hit for that stage.
-- Both versions abort immediately and report over Serial + Bluetooth when a limit stops motion.
+The main board uses direction-aware limit logic. Limits only block motion in the **downward** direction for a given stage — upward motion is always allowed even if the limit is triggered. The sensor UART is polled mid-step so limits are checked during long moves and will halt motion immediately.
 
-### Limit-to-Stage Mapping
+If a limit is already active when a command is received, the command is rejected with an `ABORT` message. If a limit triggers mid-move, the motors stop and a `STOP` message is sent.
 
-| Limit Switch | Blocks | Motors Affected |
+### Direction Mapping
+
+| Stage | "Down" Direction | Limit Blocks |
 |---|---|---|
-| Stage 2 | Stage 2 pair (controllers 1 + 4) | Both stopped together |
-| Stage 3 | Stage 3 (controller 2) | Single motor |
-| Stage 4 | Monitored but no motor mapped | — |
+| Stage 2 | `s2down` (forward = false) | Downward motion only |
+| Stage 3 | `s3down` (forward = true) | Downward motion only |
+| Stage 5 | — | No limit switch mapped |
+
+### Limit-to-Motor Mapping
+
+| Limit Switch | Motors Affected |
+|---|---|
+| Stage 2 | Controllers 1 + 4 (stopped together) |
+| Stage 3 | Controller 2 |
+| Stage 4 | Monitored but no motor mapped |
 
 ---
 
@@ -303,10 +279,12 @@ Each tool contains a resistor to GND on pin 7. The arm has a fixed pull-up resis
 ```bash
 # Build a specific board
 pio run -e main_board
+pio run -e mosfet_board
 pio run -e sensor_board
 
 # Upload to a specific board (auto-detects USB port)
 pio run -e main_board -t upload
+pio run -e mosfet_board -t upload
 pio run -e sensor_board -t upload
 
 # Upload to a specific USB port
@@ -331,9 +309,13 @@ If you have multiple ESP32 boards connected simultaneously, uncomment and set th
 build_src_filter = -<*> +<main_board/>
 upload_port = /dev/cu.usbserial-0001
 
+[env:mosfet_board]
+build_src_filter = -<*> +<mosfet_board/>
+upload_port = /dev/cu.usbserial-0002
+
 [env:sensor_board]
 build_src_filter = -<*> +<sensor_board/>
-upload_port = /dev/cu.usbserial-0002
+upload_port = /dev/cu.usbserial-0003
 ```
 
 To find your port names:
@@ -351,14 +333,16 @@ pio device list
 There is no strict order, but a practical sequence is:
 
 1. **Sensor board** — starts reporting limits immediately on boot
-2. **Main board** — expects sensor board to already be running
-3. **MOSFET board** — receives commands from main board (firmware TBD)
+2. **MOSFET board** — starts listening for commands, all outputs default off
+3. **Main board** — expects the other two boards to already be running
 
 ---
 
-## Sensor Board Protocol
+## Inter-Board Protocols
 
-### Messages Sent (Sensor -> Main)
+### Sensor Board (Sensor <-> Main)
+
+#### Messages Sent (Sensor -> Main)
 
 | Message | Meaning |
 |---|---|
@@ -366,36 +350,42 @@ There is no strict order, but a practical sequence is:
 | `LIM S2=<0\|1> S3=<0\|1> S4=<0\|1>` | Limit switch states (sent on change and on request) |
 | `ERR UNKNOWN_CMD` | Unrecognized command received |
 
-### Commands Accepted (Main -> Sensor)
+#### Commands Accepted (Main -> Sensor)
 
 | Command | Response |
 |---|---|
 | `STATUS` | Sends current `LIM ...` message |
 
----
+### MOSFET Board (MOSFET <-> Main)
 
-## MOSFET Board Protocol
+#### Messages Sent (MOSFET -> Main)
 
-### Commands Accepted (Main -> MOSFET)
-
-| Command | Expected Action |
+| Message | Meaning |
 |---|---|
-| `MAG ON` / `MAG OFF` | Toggle electromagnet output |
-| `VAC ON` / `VAC OFF` | Toggle vacuum output |
-| `SAW ON` / `SAW OFF` | Toggle saw output |
-| `ALL OFF` | All outputs off |
-| `STATUS` | Report output states |
+| `SLAVE READY` | Boot complete |
+| `ACK MAG ON` / `ACK MAG OFF` | Electromagnet toggled |
+| `ACK VAC ON` / `ACK VAC OFF` | Vacuum toggled |
+| `ACK SAW ON` / `ACK SAW OFF` | Saw toggled |
+| `ACK ALL OFF` | All outputs turned off |
+| `STATUS MAG=<ON\|OFF> VAC=<ON\|OFF> SAW=<ON\|OFF>` | Current output states |
+| `ERR UNKNOWN_CMD` | Unrecognized command received |
 
-> MOSFET board firmware is not yet implemented. These commands are sent by the main board but there is no receiving firmware in this repo.
+#### Commands Accepted (Main -> MOSFET)
+
+| Command | Response |
+|---|---|
+| `MAG ON` / `MAG OFF` | `ACK MAG ON` / `ACK MAG OFF` |
+| `VAC ON` / `VAC OFF` | `ACK VAC ON` / `ACK VAC OFF` |
+| `SAW ON` / `SAW OFF` | `ACK SAW ON` / `ACK SAW OFF` |
+| `ALL OFF` | `ACK ALL OFF` |
+| `STATUS` | `STATUS MAG=... VAC=... SAW=...` |
 
 ---
 
 ## Future Work
 
-- [ ] Implement MOSFET board firmware (receive UART commands, drive MOSFET outputs)
 - [ ] Add tool identification via ADC voltage divider on the sensor board
 - [ ] Add linear probe (potentiometer) reading
 - [ ] Implement Stage 1 (turntable) and Stage 4 motor control
 - [ ] Add debouncing / filtering to limit switch reads
-- [ ] Consolidate the two main board firmware variants into one
 - [ ] Add shared protocol header in `lib/` for message definitions
