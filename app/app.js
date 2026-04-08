@@ -1,10 +1,12 @@
 const AXES = [
-  { idx: 0, name: 'C1 / Stage2 Right', plus: 'c1f', minus: 'c1r' },
-  { idx: 1, name: 'C2 / Stage3', plus: 'c2f', minus: 'c2r' },
-  { idx: 2, name: 'C3 / Stage4', plus: 'c3f', minus: 'c3r' },
-  { idx: 3, name: 'C4 / Stage2 Left', plus: 'c4f', minus: 'c4r' },
-  { idx: 4, name: 'C5 / Stage5', plus: 'c5f', minus: 'c5r' },
-  { idx: 5, name: 'C6 / Stage1 Turntable', plus: 'c6f', minus: 'c6r' },
+  // Ordered by stage number, not controller number.
+  { idx: 5, name: 'Stage 1 / Turntable (C6)', plus: 'c6f', minus: 'c6r' },
+  // Stage 2 is physically paired (C1 + C4). Jogging either raw controller now
+  // moves both in firmware, so show one unified control here.
+  { idx: 0, name: 'Stage 2 / Lift Pair (C1 + C4)', plus: 'c1f', minus: 'c1r' },
+  { idx: 1, name: 'Stage 3 (C2)', plus: 'c2f', minus: 'c2r' },
+  { idx: 2, name: 'Stage 4 (C3)', plus: 'c3f', minus: 'c3r' },
+  { idx: 4, name: 'Stage 5 (C5)', plus: 'c5f', minus: 'c5r' },
 ];
 
 let port = null;

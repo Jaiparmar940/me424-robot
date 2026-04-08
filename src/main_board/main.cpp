@@ -51,6 +51,12 @@ const int STAGE4       = 2;   // controller 3
 const int STAGE2_LEFT  = 3;   // controller 4
 const int STAGE5       = 4;   // controller 5
 
+void enforceStage2PairTarget(long targets[NUM_DRIVERS]) {
+  // Stage 2 must always remain paired (controllers 1 and 4).
+  // Use C1 as the authoritative value when both are provided.
+  targets[STAGE2_LEFT] = targets[STAGE2_RIGHT];
+}
+
 bool invertMotor[NUM_DRIVERS] = {
   false, // controller 1 / stage 2 right
   false, // controller 2 / stage 3
@@ -346,7 +352,13 @@ void runControllerCommand(int controllerNum, bool forward, int steps) {
     return;
   }
 
-  bool ok = stepMotor(motorIndex, forward, steps);
+  bool ok = false;
+  if (motorIndex == STAGE2_RIGHT || motorIndex == STAGE2_LEFT) {
+    // Always keep stage 2 pair mechanically locked.
+    ok = stepStage2(forward, steps);
+  } else {
+    ok = stepMotor(motorIndex, forward, steps);
+  }
 
   if (ok) {
     printlnBoth("Controller " + String(controllerNum) +
@@ -416,6 +428,13 @@ int resolveToMoves(String cmd, MotorMove *moves, int maxMoves) {
     int num     = cmd.charAt(1) - '0';
     char dirCh  = cmd.charAt(2);
     if (num >= 1 && num <= 6 && (dirCh == 'f' || dirCh == 'r')) {
+      if (num == 1 || num == 4) {
+        if (maxMoves < 2) return 0;
+        bool fwd = (dirCh == 'f');
+        moves[0] = {STAGE2_RIGHT, fwd, steps, steps};
+        moves[1] = {STAGE2_LEFT,  fwd, steps, steps};
+        return 2;
+      }
       moves[0] = {num - 1, dirCh == 'f', steps, steps};
       return 1;
     }
@@ -517,6 +536,8 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
     return false;
   }
 
+  enforceStage2PairTarget(targets);
+
   long delta[NUM_DRIVERS];
   long absDelta[NUM_DRIVERS];
   bool forward[NUM_DRIVERS];
@@ -610,6 +631,7 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
 
 bool queueAddPose(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
   if (runQueueCount >= MAX_QUEUE_ITEMS) return false;
+  enforceStage2PairTarget(targets);
   QueueItem &it = runQueueItems[runQueueCount++];
   it.type = Q_POSE;
   for (int i = 0; i < NUM_DRIVERS; i++) it.targets[i] = targets[i];
@@ -959,6 +981,8 @@ void handleCommand(String cmd) {
   }
 
   if (cmd == "where") {
+    // Keep pair visible as unified value in position reporting.
+    currentPos[STAGE2_LEFT] = currentPos[STAGE2_RIGHT];
     printlnBoth("POS C1=" + String(currentPos[0]) +
                 " C2=" + String(currentPos[1]) +
                 " C3=" + String(currentPos[2]) +
@@ -972,6 +996,8 @@ void handleCommand(String cmd) {
     long p[NUM_DRIVERS];
     if (sscanf(cmd.c_str(), "setpos %ld %ld %ld %ld %ld %ld",
                &p[0], &p[1], &p[2], &p[3], &p[4], &p[5]) == 6) {
+      // Stage 2 pair is always unified.
+      p[STAGE2_LEFT] = p[STAGE2_RIGHT];
       for (int i = 0; i < NUM_DRIVERS; i++) currentPos[i] = p[i];
       printlnBoth("Position state updated");
     } else {
