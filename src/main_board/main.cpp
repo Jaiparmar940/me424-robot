@@ -30,7 +30,7 @@ const int STAGE5       = 4;   // controller 5
 bool invertMotor[NUM_DRIVERS] = {
   false, // controller 1 / stage 2 right
   false, // controller 2 / stage 3
-  false, // controller 3 / stage 4
+  true,  // controller 3 / stage 4 (reversed)
   true,  // controller 4 / stage 2 left
   false, // controller 5 / stage 5
   false  // controller 6 / stage 1 (turntable)
