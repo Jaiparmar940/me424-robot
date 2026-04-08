@@ -19,6 +19,8 @@ let currentPos = [0, 0, 0, 0, 0, 0];
 let sequence = [];
 let running = false;
 let stopRequested = false;
+let lastManualPulseDelaySent = null;
+let nextPosResolvers = [];
 
 const els = {
   connectBtn: document.getElementById('connectBtn'),
@@ -26,6 +28,7 @@ const els = {
   refreshPosBtn: document.getElementById('refreshPosBtn'),
   connStatus: document.getElementById('connStatus'),
   stepSize: document.getElementById('stepSize'),
+  manualPulseDelay: document.getElementById('manualPulseDelay'),
   jogMaxSps: document.getElementById('jogMaxSps'),
   jogRamp: document.getElementById('jogRamp'),
   axisGrid: document.getElementById('axisGrid'),
@@ -178,6 +181,11 @@ function handleIncoming(line) {
   if (m) {
     currentPos = [1,2,3,4,5,6].map((i) => parseInt(m[i], 10));
     updatePosUI();
+    if (nextPosResolvers.length > 0) {
+      const resolvers = [...nextPosResolvers];
+      nextPosResolvers = [];
+      resolvers.forEach((r) => r([...currentPos]));
+    }
   }
 }
 
@@ -193,9 +201,32 @@ async function requestWhere() {
   await sendLine('where');
 }
 
+function waitForNextPositionUpdate(timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const resolver = (pos) => {
+      clearTimeout(timer);
+      resolve(pos);
+    };
+    const timer = setTimeout(() => {
+      nextPosResolvers = nextPosResolvers.filter((r) => r !== resolver);
+      reject(new Error('Timed out waiting for position update'));
+    }, timeoutMs);
+    nextPosResolvers.push(resolver);
+  });
+}
+
 async function jogAxis(axis, positive) {
   if (!port) return;
   const steps = Math.max(1, parseInt(els.stepSize.value || '200', 10));
+  const manualPulseDelay = Math.max(100, parseInt(els.manualPulseDelay.value || '1200', 10));
+
+  // Keep manual jogging smooth by applying a manual pulse delay.
+  // Only resend when changed to reduce serial chatter.
+  if (lastManualPulseDelaySent !== manualPulseDelay) {
+    await sendLine(`speed ${manualPulseDelay}`);
+    lastManualPulseDelaySent = manualPulseDelay;
+  }
+
   const cmd = `${positive ? axis.plus : axis.minus} ${steps}`;
   await sendLine(cmd);
   await sleep(50);
@@ -242,20 +273,141 @@ function renderSequence() {
   els.sequenceList.innerHTML = '';
   sequence.forEach((item, i) => {
     const li = document.createElement('li');
+    const row = document.createElement('div');
+    row.className = 'seq-item-row';
+    const txt = document.createElement('span');
+    txt.className = 'seq-text';
+
     if (item.type === 'pose') {
-      li.textContent = `#${i} POSE [${item.pos.join(', ')}]`; 
+      txt.textContent = `#${i} POSE [${item.pos.join(', ')}]`;
     } else if (item.type === 'delay') {
-      li.textContent = `#${i} DELAY ${item.ms}ms`;
+      txt.textContent = `#${i} DELAY ${item.ms}ms`;
     } else if (item.type === 'mosfet') {
-      li.textContent = `#${i} MOSFET ${item.cmd}`;
+      txt.textContent = `#${i} MOSFET ${item.cmd}`;
     }
+
+    const actions = document.createElement('span');
+    actions.className = 'seq-actions';
+
+    const upBtn = document.createElement('button');
+    upBtn.textContent = 'Up';
+    upBtn.disabled = i === 0;
+    upBtn.onclick = () => moveSequenceItem(i, -1);
+
+    const downBtn = document.createElement('button');
+    downBtn.textContent = 'Down';
+    downBtn.disabled = i === sequence.length - 1;
+    downBtn.onclick = () => moveSequenceItem(i, 1);
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => editSequenceItem(i);
+
+    const goBtn = document.createElement('button');
+    goBtn.textContent = 'Go';
+    goBtn.disabled = item.type !== 'pose' || !port;
+    goBtn.onclick = () => goToSequencePose(i);
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Delete';
+    delBtn.onclick = () => deleteSequenceItem(i);
+
+    actions.appendChild(upBtn);
+    actions.appendChild(downBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(goBtn);
+    actions.appendChild(delBtn);
+
+    row.appendChild(txt);
+    row.appendChild(actions);
+    li.appendChild(row);
     els.sequenceList.appendChild(li);
   });
 }
 
+function moveSequenceItem(index, delta) {
+  const ni = index + delta;
+  if (ni < 0 || ni >= sequence.length) return;
+  const temp = sequence[index];
+  sequence[index] = sequence[ni];
+  sequence[ni] = temp;
+  renderSequence();
+}
+
+function deleteSequenceItem(index) {
+  sequence.splice(index, 1);
+  renderSequence();
+}
+
+function editSequenceItem(index) {
+  const item = sequence[index];
+  if (!item) return;
+
+  if (item.type === 'delay') {
+    const val = prompt('Delay ms:', String(item.ms));
+    if (val === null) return;
+    const ms = parseInt(val, 10);
+    if (Number.isNaN(ms) || ms < 0) return alert('Invalid delay value.');
+    item.ms = ms;
+    renderSequence();
+    return;
+  }
+
+  if (item.type === 'mosfet') {
+    const val = prompt('MOSFET command:', item.cmd);
+    if (val === null) return;
+    const cmd = val.trim().toLowerCase();
+    if (!cmd) return alert('Command cannot be empty.');
+    item.cmd = cmd;
+    renderSequence();
+    return;
+  }
+
+  if (item.type === 'pose') {
+    const val = prompt('Pose (6 comma-separated positions):', item.pos.join(','));
+    if (val === null) return;
+    const parts = val.split(',').map((s) => parseInt(s.trim(), 10));
+    if (parts.length !== 6 || parts.some((n) => Number.isNaN(n))) {
+      return alert('Invalid pose. Use exactly 6 integers.');
+    }
+    item.pos = parts;
+    renderSequence();
+  }
+}
+
+async function goToSequencePose(index) {
+  const item = sequence[index];
+  if (!item || item.type !== 'pose') return;
+  if (!port) {
+    alert('Connect to the controller first.');
+    return;
+  }
+  if (running) {
+    alert('A sequence is currently running.');
+    return;
+  }
+
+  const maxSps = Math.max(10, parseInt(els.playbackMaxSps.value || '1000', 10));
+  const ramp = Math.max(1, parseInt(els.playbackRamp.value || '200', 10));
+
+  try {
+    await sendLine(`syncabs ${item.pos.join(' ')} ${maxSps} ${ramp}`);
+    await waitForSyncAbsResult();
+    await requestWhere();
+  } catch (e) {
+    log(`Go-to-pose error: ${e.message}`);
+  }
+}
+
 async function recordPose() {
   await requestWhere();
-  addSequenceItem({ type: 'pose', pos: [...currentPos] });
+  try {
+    const fresh = await waitForNextPositionUpdate();
+    addSequenceItem({ type: 'pose', pos: [...fresh] });
+  } catch (e) {
+    log(`Record pose fallback: ${e.message}`);
+    addSequenceItem({ type: 'pose', pos: [...currentPos] });
+  }
 }
 
 function addDelay() {

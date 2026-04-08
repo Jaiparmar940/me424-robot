@@ -541,13 +541,17 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
   long delta[NUM_DRIVERS];
   long absDelta[NUM_DRIVERS];
   bool forward[NUM_DRIVERS];
+  bool axisActive[NUM_DRIVERS];
   long accum[NUM_DRIVERS] = {0, 0, 0, 0, 0, 0};
+  long stepped[NUM_DRIVERS] = {0, 0, 0, 0, 0, 0};
   long totalSteps = 0;
+  bool anyAxisBlocked = false;
 
   for (int i = 0; i < NUM_DRIVERS; i++) {
     delta[i] = targets[i] - currentPos[i];
     absDelta[i] = labs(delta[i]);
     forward[i] = (delta[i] >= 0);
+    axisActive[i] = (absDelta[i] > 0);
     if (absDelta[i] > totalSteps) totalSteps = absDelta[i];
   }
 
@@ -557,10 +561,13 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
   }
 
   for (int i = 0; i < NUM_DRIVERS; i++) {
-    if (absDelta[i] == 0) continue;
+    if (!axisActive[i]) continue;
     if (shouldStopMotor(i, forward[i])) {
-      printlnBoth("SYNCABS ABORT: limit active on controller " + String(i + 1));
-      return false;
+      printlnBoth("SYNCABS: controller " + String(i + 1) +
+                  " blocked by active limit; skipping this axis");
+      axisActive[i] = false;
+      anyAxisBlocked = true;
+      continue;
     }
     setDirection(i, forward[i]);
   }
@@ -595,16 +602,13 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
 
     // Determine which axes step this master tick (Bresenham style)
     for (int i = 0; i < NUM_DRIVERS; i++) {
-      if (absDelta[i] == 0) continue;
+      if (!axisActive[i]) continue;
       if (shouldStopMotor(i, forward[i])) {
-        printlnBoth("SYNCABS STOP: limit hit on controller " + String(i + 1));
-        // Snap done axes only; interrupted axis keeps current position
-        for (int j = 0; j < NUM_DRIVERS; j++) {
-          if (absDelta[j] > 0 && accum[j] >= totalSteps) {
-            currentPos[j] = targets[j];
-          }
-        }
-        return false;
+        printlnBoth("SYNCABS: limit hit on controller " + String(i + 1) +
+                    "; stopping only this axis");
+        axisActive[i] = false;
+        anyAxisBlocked = true;
+        continue;
       }
       accum[i] += absDelta[i];
       if (accum[i] >= totalSteps) {
@@ -618,13 +622,19 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
     }
     delayMicroseconds((int)dUs);
     for (int i = 0; i < NUM_DRIVERS; i++) {
-      if (pulseThisTick[i]) digitalWrite(STEP_PINS[i], LOW);
+      if (pulseThisTick[i]) {
+        digitalWrite(STEP_PINS[i], LOW);
+        stepped[i]++;
+      }
     }
     delayMicroseconds((int)dUs);
   }
 
   for (int i = 0; i < NUM_DRIVERS; i++) {
-    currentPos[i] = targets[i];
+    currentPos[i] += forward[i] ? stepped[i] : -stepped[i];
+  }
+  if (anyAxisBlocked) {
+    printlnBoth("SYNCABS: completed with one or more axes blocked by limits");
   }
   return true;
 }

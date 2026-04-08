@@ -74,6 +74,19 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   margin: 4px 0;
   font-family: ui-monospace, monospace;
 }
+.seq-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.seq-text {
+  min-width: 360px;
+}
+.seq-actions {
+  display: flex;
+  gap: 6px;
+}
 .log {
   height: 220px;
   overflow: auto;
