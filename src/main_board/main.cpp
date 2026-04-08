@@ -12,6 +12,30 @@ const int STEP_PINS[NUM_DRIVERS] = {25, 33, 32, 27, 26, 4};
 const int DIR_PINS[NUM_DRIVERS]  = {13, 14, 22, 21, 23, 15};
 
 int pulseDelayUs = 1000;
+long currentPos[NUM_DRIVERS] = {0, 0, 0, 0, 0, 0};
+volatile bool estopLatched = false;
+String estopSerialBuffer = "";
+String estopBtBuffer = "";
+
+enum QueueItemType {
+  Q_POSE = 0,
+  Q_DELAY = 1,
+  Q_CMD = 2
+};
+
+struct QueueItem {
+  QueueItemType type;
+  long targets[NUM_DRIVERS];
+  long maxSps;
+  int rampSteps;
+  unsigned long delayMs;
+  String cmd;
+};
+
+const int MAX_QUEUE_ITEMS = 64;
+QueueItem runQueueItems[MAX_QUEUE_ITEMS];
+int runQueueCount = 0;
+bool queueStopRequested = false;
 
 // Stage-to-controller mapping:
 // Stage 1 = turntable          -> controller 6 (index 5)
@@ -72,6 +96,10 @@ String btBuffer = "";
 String slaveBuffer = "";
 String sensorBuffer = "";
 
+// Forward declarations used by queue/emergency helpers
+void handleCommand(String cmd);
+void readFromSlave();
+
 // =========================
 // Helpers
 // =========================
@@ -88,6 +116,47 @@ void printlnBoth(const String &msg) {
 void sendToSlave(const String &msg) {
   SlaveSerial.println(msg);
   printlnBoth("[TO SLAVE] " + msg);
+}
+
+void parseEStopLine(String line) {
+  line.trim();
+  line.toLowerCase();
+  if (line == "estop") {
+    estopLatched = true;
+    sendToSlave("ALL OFF");
+    printlnBoth("ESTOP LATCHED");
+  } else if (line == "estop clear") {
+    estopLatched = false;
+    printlnBoth("ESTOP CLEARED");
+  }
+}
+
+void pollEmergencyInputs() {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      if (estopSerialBuffer.length() > 0) {
+        parseEStopLine(estopSerialBuffer);
+        estopSerialBuffer = "";
+      }
+    } else {
+      estopSerialBuffer += c;
+    }
+  }
+
+  while (SerialBT.available()) {
+    char c = (char)SerialBT.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      if (estopBtBuffer.length() > 0) {
+        parseEStopLine(estopBtBuffer);
+        estopBtBuffer = "";
+      }
+    } else {
+      estopBtBuffer += c;
+    }
+  }
 }
 
 void printLimitStatus() {
@@ -176,7 +245,12 @@ void setDirection(int motorIndex, bool forward) {
 // Motion functions
 // =========================
 bool stepMotor(int motorIndex, bool forward, int steps) {
+  if (estopLatched) {
+    printlnBoth("ESTOP: motion blocked");
+    return false;
+  }
   serviceSensorUART();
+  int movedSteps = 0;
 
   if (shouldStopMotor(motorIndex, forward)) {
     printlnBoth("ABORT: limit active for controller " + String(motorIndex + 1) +
@@ -187,10 +261,17 @@ bool stepMotor(int motorIndex, bool forward, int steps) {
   setDirection(motorIndex, forward);
 
   for (int i = 0; i < steps; i++) {
+    pollEmergencyInputs();
+    if (estopLatched) {
+      printlnBoth("ESTOP: controller " + String(motorIndex + 1) + " stopped");
+      currentPos[motorIndex] += forward ? movedSteps : -movedSteps;
+      return false;
+    }
     serviceSensorUART();
 
     if (shouldStopMotor(motorIndex, forward)) {
       printlnBoth("STOP: limit hit on controller " + String(motorIndex + 1));
+      currentPos[motorIndex] += forward ? movedSteps : -movedSteps;
       return false;
     }
 
@@ -198,13 +279,20 @@ bool stepMotor(int motorIndex, bool forward, int steps) {
     delayMicroseconds(pulseDelayUs);
     digitalWrite(STEP_PINS[motorIndex], LOW);
     delayMicroseconds(pulseDelayUs);
+    movedSteps++;
   }
 
+  currentPos[motorIndex] += forward ? movedSteps : -movedSteps;
   return true;
 }
 
 bool stepStage2(bool forward, int steps) {
+  if (estopLatched) {
+    printlnBoth("ESTOP: motion blocked");
+    return false;
+  }
   serviceSensorUART();
+  int movedSteps = 0;
 
   bool movingDown = !forward;
   if (stage2LimitHit && movingDown) {
@@ -216,10 +304,21 @@ bool stepStage2(bool forward, int steps) {
   setDirection(STAGE2_LEFT, forward);
 
   for (int i = 0; i < steps; i++) {
+    pollEmergencyInputs();
+    if (estopLatched) {
+      printlnBoth("ESTOP: Stage 2 stopped");
+      long d = forward ? movedSteps : -movedSteps;
+      currentPos[STAGE2_RIGHT] += d;
+      currentPos[STAGE2_LEFT]  += d;
+      return false;
+    }
     serviceSensorUART();
 
     if (stage2LimitHit && movingDown) {
       printlnBoth("STOP: Stage 2 limit hit");
+      long delta = forward ? movedSteps : -movedSteps;
+      currentPos[STAGE2_RIGHT] += delta;
+      currentPos[STAGE2_LEFT]  += delta;
       return false;
     }
 
@@ -230,8 +329,12 @@ bool stepStage2(bool forward, int steps) {
     digitalWrite(STEP_PINS[STAGE2_RIGHT], LOW);
     digitalWrite(STEP_PINS[STAGE2_LEFT], LOW);
     delayMicroseconds(pulseDelayUs);
+    movedSteps++;
   }
 
+  long delta = forward ? movedSteps : -movedSteps;
+  currentPos[STAGE2_RIGHT] += delta;
+  currentPos[STAGE2_LEFT]  += delta;
   return true;
 }
 
@@ -264,6 +367,7 @@ struct MotorMove {
   int  motorIndex;
   bool forward;
   int  stepsRemaining;
+  int  originalSteps;
 };
 
 // Translate one stage/controller command string into MotorMove entries.
@@ -278,41 +382,41 @@ int resolveToMoves(String cmd, MotorMove *moves, int maxMoves) {
   if (steps <= 0) return 0;
 
   // Stage 1 — turntable
-  if (cmd.startsWith("s1cw "))  { moves[0] = {STAGE1, true,  steps}; return 1; }
-  if (cmd.startsWith("s1ccw ")) { moves[0] = {STAGE1, false, steps}; return 1; }
+  if (cmd.startsWith("s1cw "))  { moves[0] = {STAGE1, true,  steps, steps}; return 1; }
+  if (cmd.startsWith("s1ccw ")) { moves[0] = {STAGE1, false, steps, steps}; return 1; }
 
   // Stage 2 — paired motors
   if (cmd.startsWith("s2up ")) {
     if (maxMoves < 2) return 0;
-    moves[0] = {STAGE2_RIGHT, true, steps};
-    moves[1] = {STAGE2_LEFT,  true, steps};
+    moves[0] = {STAGE2_RIGHT, true, steps, steps};
+    moves[1] = {STAGE2_LEFT,  true, steps, steps};
     return 2;
   }
   if (cmd.startsWith("s2down ")) {
     if (maxMoves < 2) return 0;
-    moves[0] = {STAGE2_RIGHT, false, steps};
-    moves[1] = {STAGE2_LEFT,  false, steps};
+    moves[0] = {STAGE2_RIGHT, false, steps, steps};
+    moves[1] = {STAGE2_LEFT,  false, steps, steps};
     return 2;
   }
 
   // Stage 3
-  if (cmd.startsWith("s3up "))   { moves[0] = {STAGE3, false, steps}; return 1; }
-  if (cmd.startsWith("s3down ")) { moves[0] = {STAGE3, true,  steps}; return 1; }
+  if (cmd.startsWith("s3up "))   { moves[0] = {STAGE3, false, steps, steps}; return 1; }
+  if (cmd.startsWith("s3down ")) { moves[0] = {STAGE3, true,  steps, steps}; return 1; }
 
   // Stage 4
-  if (cmd.startsWith("s4up "))   { moves[0] = {STAGE4, false, steps}; return 1; }
-  if (cmd.startsWith("s4down ")) { moves[0] = {STAGE4, true,  steps}; return 1; }
+  if (cmd.startsWith("s4up "))   { moves[0] = {STAGE4, false, steps, steps}; return 1; }
+  if (cmd.startsWith("s4down ")) { moves[0] = {STAGE4, true,  steps, steps}; return 1; }
 
   // Stage 5
-  if (cmd.startsWith("s5cw "))   { moves[0] = {STAGE5, false, steps}; return 1; }
-  if (cmd.startsWith("s5ccw "))  { moves[0] = {STAGE5, true,  steps}; return 1; }
+  if (cmd.startsWith("s5cw "))   { moves[0] = {STAGE5, false, steps, steps}; return 1; }
+  if (cmd.startsWith("s5ccw "))  { moves[0] = {STAGE5, true,  steps, steps}; return 1; }
 
   // Raw controller: cXf / cXr
   if (cmd.length() >= 5 && cmd.charAt(0) == 'c') {
     int num     = cmd.charAt(1) - '0';
     char dirCh  = cmd.charAt(2);
     if (num >= 1 && num <= 6 && (dirCh == 'f' || dirCh == 'r')) {
-      moves[0] = {num - 1, dirCh == 'f', steps};
+      moves[0] = {num - 1, dirCh == 'f', steps, steps};
       return 1;
     }
   }
@@ -325,6 +429,10 @@ int resolveToMoves(String cmd, MotorMove *moves, int maxMoves) {
 // finish early while the others keep running. Limits are checked per-motor
 // every iteration.
 bool stepMultiple(MotorMove *moves, int count) {
+  if (estopLatched) {
+    printlnBoth("ESTOP: motion blocked");
+    return false;
+  }
   // Pre-flight limit check
   for (int i = 0; i < count; i++) {
     if (shouldStopMotor(moves[i].motorIndex, moves[i].forward)) {
@@ -340,6 +448,15 @@ bool stepMultiple(MotorMove *moves, int count) {
   }
 
   while (true) {
+    pollEmergencyInputs();
+    if (estopLatched) {
+      printlnBoth("ESTOP: parallel motion stopped");
+      for (int i = 0; i < count; i++) {
+        int moved = moves[i].originalSteps - moves[i].stepsRemaining;
+        currentPos[moves[i].motorIndex] += moves[i].forward ? moved : -moved;
+      }
+      return false;
+    }
     serviceSensorUART();
 
     // Check limits and count still-active motors
@@ -373,6 +490,209 @@ bool stepMultiple(MotorMove *moves, int count) {
     delayMicroseconds(pulseDelayUs);
   }
 
+  for (int i = 0; i < count; i++) {
+    int moved = moves[i].originalSteps - moves[i].stepsRemaining;
+    currentPos[moves[i].motorIndex] += moves[i].forward ? moved : -moved;
+  }
+  return true;
+}
+
+int parseSyncAbsArgs(const String &cmd, long targets[NUM_DRIVERS], long &maxSps, int &rampSteps) {
+  // Format:
+  // syncabs t1 t2 t3 t4 t5 t6 max_sps ramp_steps
+  return sscanf(cmd.c_str(),
+                "syncabs %ld %ld %ld %ld %ld %ld %ld %d",
+                &targets[0], &targets[1], &targets[2],
+                &targets[3], &targets[4], &targets[5],
+                &maxSps, &rampSteps);
+}
+
+bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
+  if (estopLatched) {
+    printlnBoth("ESTOP: motion blocked");
+    return false;
+  }
+  if (maxSps < 1) {
+    printlnBoth("SYNCABS: max_sps must be >= 1");
+    return false;
+  }
+
+  long delta[NUM_DRIVERS];
+  long absDelta[NUM_DRIVERS];
+  bool forward[NUM_DRIVERS];
+  long accum[NUM_DRIVERS] = {0, 0, 0, 0, 0, 0};
+  long totalSteps = 0;
+
+  for (int i = 0; i < NUM_DRIVERS; i++) {
+    delta[i] = targets[i] - currentPos[i];
+    absDelta[i] = labs(delta[i]);
+    forward[i] = (delta[i] >= 0);
+    if (absDelta[i] > totalSteps) totalSteps = absDelta[i];
+  }
+
+  if (totalSteps == 0) {
+    printlnBoth("SYNCABS: already at target");
+    return true;
+  }
+
+  for (int i = 0; i < NUM_DRIVERS; i++) {
+    if (absDelta[i] == 0) continue;
+    if (shouldStopMotor(i, forward[i])) {
+      printlnBoth("SYNCABS ABORT: limit active on controller " + String(i + 1));
+      return false;
+    }
+    setDirection(i, forward[i]);
+  }
+
+  long minDelayUs = 500000L / maxSps; // half-cycle delay
+  if (minDelayUs < 100) minDelayUs = 100;
+  long slowDelayUs = max((long)pulseDelayUs, minDelayUs * 3L);
+  if (rampSteps < 1) rampSteps = 1;
+  if ((long)rampSteps * 2L > totalSteps) rampSteps = (int)(totalSteps / 2L);
+  if (rampSteps < 1) rampSteps = 1;
+
+  for (long m = 0; m < totalSteps; m++) {
+    pollEmergencyInputs();
+    if (estopLatched) {
+      printlnBoth("ESTOP: sync motion stopped");
+      return false;
+    }
+    serviceSensorUART();
+
+    // Ramp profile on the shared timeline
+    long dUs = minDelayUs;
+    if (m < rampSteps) {
+      long num = (long)(rampSteps - m) * (slowDelayUs - minDelayUs);
+      dUs = minDelayUs + num / rampSteps;
+    } else if (m >= totalSteps - rampSteps) {
+      long phase = m - (totalSteps - rampSteps);
+      long num = phase * (slowDelayUs - minDelayUs);
+      dUs = minDelayUs + num / rampSteps;
+    }
+
+    bool pulseThisTick[NUM_DRIVERS] = {false, false, false, false, false, false};
+
+    // Determine which axes step this master tick (Bresenham style)
+    for (int i = 0; i < NUM_DRIVERS; i++) {
+      if (absDelta[i] == 0) continue;
+      if (shouldStopMotor(i, forward[i])) {
+        printlnBoth("SYNCABS STOP: limit hit on controller " + String(i + 1));
+        // Snap done axes only; interrupted axis keeps current position
+        for (int j = 0; j < NUM_DRIVERS; j++) {
+          if (absDelta[j] > 0 && accum[j] >= totalSteps) {
+            currentPos[j] = targets[j];
+          }
+        }
+        return false;
+      }
+      accum[i] += absDelta[i];
+      if (accum[i] >= totalSteps) {
+        accum[i] -= totalSteps;
+        pulseThisTick[i] = true;
+      }
+    }
+
+    for (int i = 0; i < NUM_DRIVERS; i++) {
+      if (pulseThisTick[i]) digitalWrite(STEP_PINS[i], HIGH);
+    }
+    delayMicroseconds((int)dUs);
+    for (int i = 0; i < NUM_DRIVERS; i++) {
+      if (pulseThisTick[i]) digitalWrite(STEP_PINS[i], LOW);
+    }
+    delayMicroseconds((int)dUs);
+  }
+
+  for (int i = 0; i < NUM_DRIVERS; i++) {
+    currentPos[i] = targets[i];
+  }
+  return true;
+}
+
+bool queueAddPose(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
+  if (runQueueCount >= MAX_QUEUE_ITEMS) return false;
+  QueueItem &it = runQueueItems[runQueueCount++];
+  it.type = Q_POSE;
+  for (int i = 0; i < NUM_DRIVERS; i++) it.targets[i] = targets[i];
+  it.maxSps = maxSps;
+  it.rampSteps = rampSteps;
+  it.delayMs = 0;
+  it.cmd = "";
+  return true;
+}
+
+bool queueAddDelay(unsigned long ms) {
+  if (runQueueCount >= MAX_QUEUE_ITEMS) return false;
+  QueueItem &it = runQueueItems[runQueueCount++];
+  it.type = Q_DELAY;
+  it.maxSps = 0;
+  it.rampSteps = 0;
+  it.delayMs = ms;
+  it.cmd = "";
+  return true;
+}
+
+bool queueAddCmd(const String &cmd) {
+  if (runQueueCount >= MAX_QUEUE_ITEMS) return false;
+  QueueItem &it = runQueueItems[runQueueCount++];
+  it.type = Q_CMD;
+  it.maxSps = 0;
+  it.rampSteps = 0;
+  it.delayMs = 0;
+  it.cmd = cmd;
+  return true;
+}
+
+bool queueDelayWait(unsigned long ms) {
+  unsigned long t0 = millis();
+  while ((millis() - t0) < ms) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    readFromSlave();
+    if (estopLatched || queueStopRequested) return false;
+    delay(2);
+  }
+  return true;
+}
+
+bool runQueueExecution() {
+  if (runQueueCount == 0) {
+    printlnBoth("QRUN: queue empty");
+    return false;
+  }
+
+  if (estopLatched) {
+    printlnBoth("QRUN: blocked by ESTOP");
+    return false;
+  }
+
+  queueStopRequested = false;
+  printlnBoth("QRUN: start");
+
+  for (int i = 0; i < runQueueCount; i++) {
+    pollEmergencyInputs();
+    if (estopLatched || queueStopRequested) {
+      printlnBoth("QRUN: stopped");
+      return false;
+    }
+
+    QueueItem &it = runQueueItems[i];
+    if (it.type == Q_POSE) {
+      bool ok = runSyncAbs(it.targets, it.maxSps, it.rampSteps);
+      if (!ok) {
+        printlnBoth("QRUN: pose aborted at item " + String(i));
+        return false;
+      }
+    } else if (it.type == Q_DELAY) {
+      if (!queueDelayWait(it.delayMs)) {
+        printlnBoth("QRUN: delay interrupted at item " + String(i));
+        return false;
+      }
+    } else if (it.type == Q_CMD) {
+      handleCommand(it.cmd);
+    }
+  }
+
+  printlnBoth("QRUN: done");
   return true;
 }
 
@@ -471,10 +791,25 @@ void printHelp() {
   printlnBoth("  seq s2up 400, s3down 200, mag on   -> run in order");
   printlnBoth("  par s2up 400, s5cw 200             -> run simultaneously");
   printlnBoth("  (par supports motor/stage commands only)");
+  printlnBoth("  syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps");
+  printlnBoth("     -> synchronized absolute move with accel/decel ramp");
+  printlnBoth("  qclear");
+  printlnBoth("  qadd pose t1 t2 t3 t4 t5 t6 maxSps rampSteps");
+  printlnBoth("  qadd delay ms");
+  printlnBoth("  qadd cmd <firmware command>");
+  printlnBoth("  qlist");
+  printlnBoth("  qrun");
+  printlnBoth("  qstop");
+  printlnBoth("  qstatus");
   printlnBoth("");
 
   printlnBoth("Other:");
   printlnBoth("  speed 800     -> set pulse delay in microseconds");
+  printlnBoth("  where         -> print current tracked positions");
+  printlnBoth("  setpos p1 p2 p3 p4 p5 p6 -> overwrite tracked positions");
+  printlnBoth("  estop         -> latch emergency stop (blocks all motion)");
+  printlnBoth("  estop clear   -> clear e-stop latch");
+  printlnBoth("  estop status  -> print e-stop state");
   printlnBoth("  limits        -> print latest limit states");
   printlnBoth("");
 
@@ -511,6 +846,150 @@ void handleCommand(String cmd) {
 
   if (cmd == "limits") {
     printLimitStatus();
+    return;
+  }
+
+  if (cmd == "estop") {
+    estopLatched = true;
+    sendToSlave("ALL OFF");
+    printlnBoth("ESTOP LATCHED");
+    return;
+  }
+
+  if (cmd == "estop clear") {
+    estopLatched = false;
+    printlnBoth("ESTOP CLEARED");
+    return;
+  }
+
+  if (cmd == "estop status") {
+    printlnBoth(String("ESTOP=") + (estopLatched ? "1" : "0"));
+    return;
+  }
+
+  if (cmd == "qclear") {
+    runQueueCount = 0;
+    queueStopRequested = false;
+    printlnBoth("Q: cleared");
+    return;
+  }
+
+  if (cmd == "qstop") {
+    queueStopRequested = true;
+    printlnBoth("Q: stop requested");
+    return;
+  }
+
+  if (cmd == "qstatus") {
+    printlnBoth("Q: count=" + String(runQueueCount) +
+                " stop=" + String(queueStopRequested ? "1" : "0"));
+    return;
+  }
+
+  if (cmd == "qlist") {
+    printlnBoth("Q: items=" + String(runQueueCount));
+    for (int i = 0; i < runQueueCount; i++) {
+      QueueItem &it = runQueueItems[i];
+      if (it.type == Q_POSE) {
+        printlnBoth("Q[" + String(i) + "] POSE " +
+                    String(it.targets[0]) + " " + String(it.targets[1]) + " " +
+                    String(it.targets[2]) + " " + String(it.targets[3]) + " " +
+                    String(it.targets[4]) + " " + String(it.targets[5]) +
+                    " maxSps=" + String(it.maxSps) +
+                    " ramp=" + String(it.rampSteps));
+      } else if (it.type == Q_DELAY) {
+        printlnBoth("Q[" + String(i) + "] DELAY " + String(it.delayMs) + "ms");
+      } else {
+        printlnBoth("Q[" + String(i) + "] CMD " + it.cmd);
+      }
+    }
+    return;
+  }
+
+  if (cmd == "qrun") {
+    runQueueExecution();
+    return;
+  }
+
+  if (cmd.startsWith("qadd pose ")) {
+    long t[NUM_DRIVERS];
+    long maxSps;
+    int rampSteps;
+    if (sscanf(cmd.c_str(),
+               "qadd pose %ld %ld %ld %ld %ld %ld %ld %d",
+               &t[0], &t[1], &t[2], &t[3], &t[4], &t[5], &maxSps, &rampSteps) == 8) {
+      if (queueAddPose(t, maxSps, rampSteps)) {
+        printlnBoth("Q: added pose");
+      } else {
+        printlnBoth("Q: full");
+      }
+    } else {
+      printlnBoth("Usage: qadd pose t1 t2 t3 t4 t5 t6 maxSps rampSteps");
+    }
+    return;
+  }
+
+  if (cmd.startsWith("qadd delay ")) {
+    unsigned long ms = (unsigned long)cmd.substring(11).toInt();
+    if (ms > 0 || cmd.substring(11) == "0") {
+      if (queueAddDelay(ms)) {
+        printlnBoth("Q: added delay");
+      } else {
+        printlnBoth("Q: full");
+      }
+    } else {
+      printlnBoth("Usage: qadd delay ms");
+    }
+    return;
+  }
+
+  if (cmd.startsWith("qadd cmd ")) {
+    String qcmd = cmd.substring(9);
+    qcmd.trim();
+    if (qcmd.length() == 0) {
+      printlnBoth("Usage: qadd cmd <firmware command>");
+      return;
+    }
+    if (queueAddCmd(qcmd)) {
+      printlnBoth("Q: added cmd");
+    } else {
+      printlnBoth("Q: full");
+    }
+    return;
+  }
+
+  if (cmd == "where") {
+    printlnBoth("POS C1=" + String(currentPos[0]) +
+                " C2=" + String(currentPos[1]) +
+                " C3=" + String(currentPos[2]) +
+                " C4=" + String(currentPos[3]) +
+                " C5=" + String(currentPos[4]) +
+                " C6=" + String(currentPos[5]));
+    return;
+  }
+
+  if (cmd.startsWith("setpos ")) {
+    long p[NUM_DRIVERS];
+    if (sscanf(cmd.c_str(), "setpos %ld %ld %ld %ld %ld %ld",
+               &p[0], &p[1], &p[2], &p[3], &p[4], &p[5]) == 6) {
+      for (int i = 0; i < NUM_DRIVERS; i++) currentPos[i] = p[i];
+      printlnBoth("Position state updated");
+    } else {
+      printlnBoth("Usage: setpos p1 p2 p3 p4 p5 p6");
+    }
+    return;
+  }
+
+  if (cmd.startsWith("syncabs ")) {
+    long targets[NUM_DRIVERS];
+    long maxSps = 0;
+    int rampSteps = 0;
+    if (parseSyncAbsArgs(cmd, targets, maxSps, rampSteps) == 8) {
+      bool ok = runSyncAbs(targets, maxSps, rampSteps);
+      printlnBoth(ok ? "SYNCABS: done" : "SYNCABS: aborted");
+    } else {
+      printlnBoth("Usage: syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps");
+    }
     return;
   }
 

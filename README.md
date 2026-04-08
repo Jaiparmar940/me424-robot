@@ -173,6 +173,15 @@ Commands are separated by `,`. Whitespace around commas is ignored.
 |---|---|
 | `seq <cmd1>, <cmd2>, ...` | Execute commands one at a time in order. Any command type is valid (motor, MOSFET, utility). |
 | `par <cmd1>, <cmd2>, ...` | Execute motor commands simultaneously. All specified motors are stepped on the same clock tick. Motor/stage commands only — MOSFET commands are not supported in `par`. |
+| `syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps` | Execute a synchronized **absolute** 6-axis move. Each axis reaches its target at the same time, speed is capped by `maxSps` (steps/s), and accel/decel ramping is applied using `rampSteps`. |
+| `qclear` | Clear onboard queue |
+| `qadd pose t1 t2 t3 t4 t5 t6 maxSps rampSteps` | Append a synchronized absolute move segment to onboard queue |
+| `qadd delay ms` | Append delay segment to onboard queue |
+| `qadd cmd <firmware command>` | Append command segment (e.g. `vac on`, `alloff`) |
+| `qlist` | Print current queue items |
+| `qrun` | Execute queued items on firmware (true onboard playlist execution) |
+| `qstop` | Request stop for running queue |
+| `qstatus` | Print queue count and stop state |
 
 **Examples:**
 ```
@@ -180,6 +189,14 @@ seq s2up 400, s3down 200, mag on
 par s2up 400, s5cw 200
 par s3down 200, s4down 300, s1cw 100
 seq par s3down 400, s4down 400, s2up 200, mag on
+syncabs 0 1000 -500 0 200 0 1200 300
+qclear
+qadd pose 0 400 0 0 0 0 900 150
+qadd delay 500
+qadd cmd vac on
+qadd pose 0 0 0 0 0 0 900 150
+qadd cmd vac off
+qrun
 ```
 
 In `par`, motors with different step counts run until each individually finishes — longer moves continue while shorter ones stop. Limits are checked per-motor on every step.
@@ -189,6 +206,11 @@ In `par`, motors with different step counts run until each individually finishes
 | Command | Description |
 |---|---|
 | `speed <us>` | Set stepper pulse delay in microseconds (minimum 100) |
+| `where` | Print the tracked current position for all 6 controllers |
+| `setpos p1 p2 p3 p4 p5 p6` | Overwrite the tracked position state (useful after manual zeroing/homing) |
+| `estop` | Latch emergency stop immediately (also during active motion/queue). Motion commands are blocked until cleared. Also sends `ALL OFF` to MOSFET board. |
+| `estop clear` | Clear the e-stop latch to allow motion again |
+| `estop status` | Print `ESTOP=1` or `ESTOP=0` |
 | `limits` | Print last-known limit switch states |
 | `help` | Print command menu |
 
@@ -362,6 +384,62 @@ There is no strict order, but a practical sequence is:
 1. **Sensor board** — starts reporting limits immediately on boot
 2. **MOSFET board** — starts listening for commands, all outputs default off
 3. **Main board** — expects the other two boards to already be running
+
+---
+
+## Web App (8 Requirements UI)
+
+A browser app is included at `app/` and uses Web Serial to talk directly to the main ESP.
+
+### Run the App
+
+1. Start a local static server from repo root:
+   - `python3 -m http.server 8080`
+2. Open [http://localhost:8080/app/](http://localhost:8080/app/)
+3. Click **Connect (Web Serial)** and select your ESP32 serial port.
+
+Use Chrome or Edge desktop (Web Serial is not supported in Safari/Firefox).
+
+### Requirement Coverage
+
+1. **Manual jog with granularity**
+   - `Manual Control` section
+   - Set `Step Size`
+   - Use `+ Jog` / `- Jog` per motor
+
+2. **Record all 6 positions in one state**
+   - `Record Current Pose` captures all 6 tracked positions
+
+3. **Add delays between states**
+   - Set `Delay (ms)` and click `Add Delay`
+
+4. **Append more recorded positions**
+   - Record additional poses; list appends in order
+
+5. **Toggle MOSFET functions in same list**
+   - Choose `MOSFET Action`, click `Add MOSFET Action`
+
+6. **Replay with synchronized finish + ramps + max speed**
+   - Sequence playback uses firmware command:
+     - `syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps`
+   - `Playback maxSps` and `Playback rampSteps` control speed/ramp
+   - Axis motion is synchronized so all active axes finish together
+
+7. **Zero axes from button**
+   - `Set Current as Zero (All)` -> soft-zero all
+   - `Zero This Axis` on each axis -> soft-zero per axis
+   - `Home Stages 2/3/4 to Limits` -> drives downward until limit stop, then zeroes those axes
+
+8. **Save commands locally**
+   - `Save Local` / `Load Local` uses browser `localStorage`
+   - `Export JSON` / `Import JSON` for file-based reuse
+
+### App Data Model
+
+Sequence items are one of:
+- `pose`: six-axis absolute positions
+- `delay`: milliseconds
+- `mosfet`: command string (`mag on`, `vac off`, etc.)
 
 ---
 
