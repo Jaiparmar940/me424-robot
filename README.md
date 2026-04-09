@@ -13,7 +13,7 @@ The wrist uses an 8-pin magnetic connector to hot-swap tools.
 │              │◂────────── │              │
 │              │   115200   └──────────────┘
 │              │
-│  - Bluetooth │   UART1    ┌──────────────┐
+│  - Wi‑Fi     │   UART1    ┌──────────────┐
 │  - Steppers  │ ──────────▸│              │
 │  - Commands  │            │ Sensor Board │   (limit switches, tool ID)
 │              │◂────────── │              │
@@ -22,9 +22,9 @@ The wrist uses an 8-pin magnetic connector to hot-swap tools.
 
 | Board | Role |
 |---|---|
-| **Main Board** | Master controller. Bluetooth serial interface, drives 6 stepper motors via TB6600 drivers, routes commands to other boards over UART. |
+| **Main Board** | Master controller. USB serial, Wi‑Fi (HTTP UI + WebSocket + OTA), drives 6 stepper motors via TB6600 drivers, routes commands to other boards over UART. |
 | **MOSFET Board** | Receives commands from Main Board over UART. Drives 3 MOSFET outputs for electromagnet, vacuum, and circular saw. Sends ACK responses. |
-| **Sensor Board** | Reads 3 limit switches and reports state changes to Main Board over UART. |
+| **Sensor Board** | Reads three limit switches plus Stage 5 Hall-at-zero (GPIO14 / HW-477) and reports state changes to Main Board over UART. |
 
 ## Project Structure
 
@@ -71,7 +71,7 @@ Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has i
 
 | Function | Details |
 |---|---|
-| Bluetooth Classic | Advertises as `ESP32_STAGE_CTRL` at 115200 baud |
+| Wi‑Fi | Station mode: OTA updates, HTTP dashboard on port 80, WebSocket commands on 81, optional TCP 3333 |
 
 ---
 
@@ -125,7 +125,7 @@ All UART buses run at **115200 baud, 8N1**.
 
 ## Command Reference
 
-Commands are sent to the Main Board over USB Serial or Bluetooth. Each command is case-insensitive and terminated by a newline (`\n`). Responses are echoed to both USB Serial and Bluetooth simultaneously.
+Commands are sent to the Main Board over **USB serial**, **WebSocket** (same line protocol as serial), or **TCP 3333**. Each command is case-insensitive and terminated by a newline (`\n`). Responses are echoed to USB and any active network clients.
 
 ### Stage Commands
 
@@ -211,20 +211,25 @@ In `par`, motors with different step counts run until each individually finishes
 | `estop` | Latch emergency stop immediately (also during active motion/queue). Motion commands are blocked until cleared. Also sends `ALL OFF` to MOSFET board. |
 | `estop clear` | Clear the e-stop latch to allow motion again |
 | `estop status` | Print `ESTOP=1` or `ESTOP=0` |
-| `limits` | Print last-known limit switch states |
+| `limits` | Print last-known limit switch and Stage 5 Hall (`S5H`) states |
+| `home s1` | Soft-zero turntable: set tracked C6 position to 0 at the current pose |
+| `home s2` | Drive Stage 2 toward its limit, then zero C1/C4 at the limit |
+| `home s3` | Drive Stage 3 toward its limit, then zero C2 |
+| `home s4` | Drive Stage 4 toward its limit, then zero C3 |
+| `home s5` | Jog Stage 5 until Hall at zero (`S5H=0`), then zero C5 |
 | `help` | Print command menu |
 
 ---
 
 ## Limit Switch Safety
 
-The sensor board monitors 3 limit switches and sends state changes to the main board using this protocol:
+The sensor board monitors three limit switches plus a Stage 5 Hall line (3144-style sensor through an HW-477 comparator on **GPIO14**; homing-only, not a motion limit) and sends state changes to the main board using this protocol:
 
 ```
-LIM S2=1 S3=0 S4=0
+LIM S2=1 S3=0 S4=0 S5H=0
 ```
 
-Where `1` = switch triggered (pressed), `0` = switch open.
+For **S2–S4**, `1` = limit switch triggered (pressed), `0` = open. For **S5H** the convention is reversed: **`0` = at Hall zero position**, `1` = away from zero. Adjust the HW-477 threshold pot. Sensor firmware defaults to **`S5_HALL_AT_ZERO_ACTIVE_HIGH = false`** (pin **LOW** = at zero); set to `true` if your comparator output is the opposite.
 
 ### Behavior
 
@@ -240,7 +245,7 @@ If a limit is already active when a command is received, the command is rejected
 | Stage 2 | `s2down` (forward = false) | Downward motion only |
 | Stage 3 | `s3down` (forward = true) | Downward motion only |
 | Stage 4 | `s4down` (forward = true) | Downward motion only |
-| Stage 5 | — | No limit switch |
+| Stage 5 | — | No limit switch (Hall `S5H` on sensor board is for **homing only**, not blocking motion) |
 
 ### Limit-to-Motor Mapping
 
@@ -252,22 +257,18 @@ If a limit is already active when a command is received, the command is rejected
 
 ---
 
-## Bluetooth Usage
+## Wi‑Fi usage (replaces Bluetooth)
 
-The main board advertises as a Bluetooth Classic (SPP) device named **`ESP32_STAGE_CTRL`**.
+Bluetooth Classic has been removed to save flash/RAM. Use one of the following:
 
-### Connecting
+| Channel | Purpose |
+|---|---|
+| USB serial | 115200 baud, same as before |
+| Browser | Open `http://me424-main.local/` (or the main board IP) for the hosted web app; it connects over WebSocket port 81 |
+| TCP | `nc me424-main.local 3333` for raw line commands |
+| OTA | PlatformIO `*_ota` environments upload firmware over the network |
 
-1. Power on the main board.
-2. On your phone/laptop, scan for Bluetooth devices and pair with `ESP32_STAGE_CTRL`.
-3. Open a Bluetooth serial terminal app:
-   - **Android:** "Serial Bluetooth Terminal" (free on Play Store)
-   - **iOS:** Bluetooth Classic SPP is not natively supported on iOS; use a BLE bridge or a laptop
-   - **macOS/Linux:** `screen /dev/cu.ESP32_STAGE_CTRL 115200` or any serial terminal
-   - **Windows:** Pair the device, note the COM port, open with PuTTY/Tera Term at 115200
-4. Send any command from the [Command Reference](#command-reference). Responses are echoed to both Bluetooth and USB Serial simultaneously.
-
-### Terminal Settings
+### Serial terminal settings (USB)
 
 | Setting | Value |
 |---|---|
@@ -349,6 +350,48 @@ pio run
 pio run -t clean
 ```
 
+### WiFi / OTA Upload (All Boards)
+
+Bluetooth transport on the main board has been replaced with WiFi command + OTA support.  
+All three boards now support Arduino OTA when WiFi credentials are compiled in.
+
+1. Set WiFi credentials in `platformio.ini` under `[env]` (`build_flags`: `WIFI_SSID`, `WIFI_PASSWORD`). Each board env merges these via `${env.build_flags}`.
+2. First flash each board once over USB:
+
+```bash
+pio run -e main_board -t upload
+pio run -e mosfet_board -t upload
+pio run -e sensor_board -t upload
+```
+
+3. Then use OTA environments:
+
+```bash
+pio run -e main_board_ota -t upload
+pio run -e mosfet_board_ota -t upload
+pio run -e sensor_board_ota -t upload
+```
+
+Default OTA hostnames are:
+- `me424-main.local`
+- `me424-mosfet.local`
+- `me424-sensor.local`
+
+### Wireless web app (main board)
+
+The main board serves the dashboard from **LittleFS** at **`http://<ip>/`** (try `http://me424-main.local/`). The same UI talks to the firmware over **WebSocket** port **81** (line-based commands, same as USB serial). Raw TCP on port **3333** still works for `nc` / scripts.
+
+After changing files in `app/`, copy them into `data/` and upload the filesystem (USB or OTA):
+
+```bash
+cp app/index.html app/app.js app/styles.css data/
+pio run -e main_board -t uploadfs
+# or, after OTA works:
+pio run -e main_board_ota -t uploadfs
+```
+
+Open the UI in a browser on the same Wi‑Fi network; the page auto-connects over Web‑Fi. Use `http://localhost:8080/app/` (or similar) with **Connect (USB Serial)** for local dev, or add **`?usb=1`** to the robot URL to force USB from a desktop.
+
 ### Setting Upload Ports
 
 If you have multiple ESP32 boards connected simultaneously, uncomment and set the `upload_port` lines in `platformio.ini`:
@@ -425,10 +468,11 @@ Use Chrome or Edge desktop (Web Serial is not supported in Safari/Firefox).
    - `Playback maxSps` and `Playback rampSteps` control speed/ramp
    - Axis motion is synchronized so all active axes finish together
 
-7. **Zero axes from button**
-   - `Set Current as Zero (All)` -> soft-zero all
-   - `Zero This Axis` on each axis -> soft-zero per axis
-   - `Home Stages 2/3/4 to Limits` -> drives downward until limit stop, then zeroes those axes
+7. **Zero / home from buttons**
+   - `Set Current as Zero (All)` → soft-zero all tracked positions (`setpos …`)
+   - `Zero This Axis` on each axis → soft-zero that controller only
+   - `Auto home (home sN)` under each stage → runs the matching firmware homing command (`home s1` … `home s5`)
+   - `Home Stages 2–4 (limits)` → runs `home s2`, then `home s3`, then `home s4` in order
 
 8. **Save commands locally**
    - `Save Local` / `Load Local` uses browser `localStorage`
@@ -452,7 +496,7 @@ Sequence items are one of:
 | Message | Meaning |
 |---|---|
 | `SENSOR READY` | Boot complete |
-| `LIM S2=<0\|1> S3=<0\|1> S4=<0\|1>` | Limit switch states (sent on change and on request) |
+| `LIM S2=<0\|1> S3=<0\|1> S4=<0\|1> S5H=<0\|1>` | S2–S4: `1` = limit hit; **S5H: `0` = at Hall zero**, `1` = away (sent on change and at boot) |
 | `ERR UNKNOWN_CMD` | Unrecognized command received |
 
 #### Commands Accepted (Main -> Sensor)

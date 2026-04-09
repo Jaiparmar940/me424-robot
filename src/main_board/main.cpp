@@ -1,7 +1,28 @@
 #include <Arduino.h>
-#include "BluetoothSerial.h"
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+#include <FS.h>
+#include <LittleFS.h>
+#include <WebServer.h>
+#include <WebSocketsServer.h>
 
-BluetoothSerial SerialBT;
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD ""
+#endif
+#ifndef WIFI_HOSTNAME
+#define WIFI_HOSTNAME "me424-main"
+#endif
+
+WiFiServer CommandServer(3333);
+WiFiClient commandClient;
+
+WebServer httpServer(80);
+WebSocketsServer webSocket(81);
+bool webSocketLive = false;
+bool httpServerLive = false;
 
 // =========================
 // Stepper config
@@ -15,7 +36,7 @@ int pulseDelayUs = 1000;
 long currentPos[NUM_DRIVERS] = {0, 0, 0, 0, 0, 0};
 volatile bool estopLatched = false;
 String estopSerialBuffer = "";
-String estopBtBuffer = "";
+String estopWifiBuffer = "";
 
 enum QueueItemType {
   Q_POSE = 0,
@@ -93,12 +114,15 @@ const long SENSOR_BAUD = 115200;
 volatile bool stage2LimitHit = false;
 volatile bool stage3LimitHit = false;
 volatile bool stage4LimitHit = false;
+// Stage 5: Hall + HW-477 on sensor board GPIO14 — homing/zero only, not a motion limit
+volatile bool stage5HallAtZero = false;
+String lastSensorLimMsg = "";
 
 // =========================
 // Buffers
 // =========================
 String serialBuffer = "";
-String btBuffer = "";
+String wifiBuffer = "";
 String slaveBuffer = "";
 String sensorBuffer = "";
 
@@ -106,17 +130,53 @@ String sensorBuffer = "";
 void handleCommand(String cmd);
 void readFromSlave();
 
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
+  if (type == WStype_TEXT) {
+    String s;
+    s.reserve(length);
+    for (size_t i = 0; i < length; i++) s += (char)payload[i];
+    s.trim();
+    if (s.length()) handleCommand(s);
+  } else if (type == WStype_CONNECTED) {
+    webSocket.sendTXT(num, "WS: connected to ME424 main");
+  }
+}
+
+static void httpSendLittleFSFile(const char *path, const char *mime) {
+  if (!LittleFS.exists(path)) {
+    httpServer.send(404, "text/plain",
+                    String("LittleFS missing: ") + path +
+                        " — put index.html, app.js, styles.css in data/ then: pio run -e main_board -t uploadfs");
+    return;
+  }
+  File f = LittleFS.open(path, "r");
+  if (!f) {
+    httpServer.send(500, "text/plain", "LittleFS open failed");
+    return;
+  }
+  httpServer.streamFile(f, mime);
+  f.close();
+}
+
 // =========================
 // Helpers
 // =========================
 void printBoth(const String &msg) {
   Serial.print(msg);
-  SerialBT.print(msg);
+  if (commandClient && commandClient.connected()) commandClient.print(msg);
+  if (webSocketLive) {
+    String wscopy = msg;
+    webSocket.broadcastTXT(wscopy);
+  }
 }
 
 void printlnBoth(const String &msg) {
   Serial.println(msg);
-  SerialBT.println(msg);
+  if (commandClient && commandClient.connected()) commandClient.println(msg);
+  if (webSocketLive) {
+    String wscopy = msg;
+    webSocket.broadcastTXT(wscopy);
+  }
 }
 
 void sendToSlave(const String &msg) {
@@ -151,24 +211,28 @@ void pollEmergencyInputs() {
     }
   }
 
-  while (SerialBT.available()) {
-    char c = (char)SerialBT.read();
-    if (c == '\r') continue;
-    if (c == '\n') {
-      if (estopBtBuffer.length() > 0) {
-        parseEStopLine(estopBtBuffer);
-        estopBtBuffer = "";
+  if (commandClient && commandClient.connected()) {
+    while (commandClient.available()) {
+      char c = (char)commandClient.read();
+      if (c == '\r') continue;
+      if (c == '\n') {
+        if (estopWifiBuffer.length() > 0) {
+          parseEStopLine(estopWifiBuffer);
+          estopWifiBuffer = "";
+        }
+      } else {
+        estopWifiBuffer += c;
       }
-    } else {
-      estopBtBuffer += c;
     }
   }
 }
 
 void printLimitStatus() {
+  // S5H: 0 = at Hall zero, 1 = away (unlike S2–S4 where 1 = limit hit).
   printlnBoth("LIMITS S2=" + String(stage2LimitHit ? "1" : "0") +
               " S3=" + String(stage3LimitHit ? "1" : "0") +
-              " S4=" + String(stage4LimitHit ? "1" : "0"));
+              " S4=" + String(stage4LimitHit ? "1" : "0") +
+              " S5H=" + String(stage5HallAtZero ? "0" : "1"));
 }
 
 void parseSensorMessage(String msg) {
@@ -177,9 +241,15 @@ void parseSensorMessage(String msg) {
 
   if (!msg.startsWith("LIM ")) return;
 
+  const bool prevS2 = stage2LimitHit;
+  const bool prevS3 = stage3LimitHit;
+  const bool prevS4 = stage4LimitHit;
+  const bool prevS5Hall = stage5HallAtZero;
+
   int s2pos = msg.indexOf("S2=");
   int s3pos = msg.indexOf("S3=");
   int s4pos = msg.indexOf("S4=");
+  int s5hpos = msg.indexOf("S5H=");
 
   if (s2pos >= 0 && s2pos + 3 < (int)msg.length()) {
     stage2LimitHit = (msg.charAt(s2pos + 3) == '1');
@@ -190,8 +260,24 @@ void parseSensorMessage(String msg) {
   if (s4pos >= 0 && s4pos + 3 < (int)msg.length()) {
     stage4LimitHit = (msg.charAt(s4pos + 3) == '1');
   }
+  if (s5hpos >= 0 && s5hpos + 4 < (int)msg.length()) {
+    bool s5 = (msg.charAt(s5hpos + 4) == '0');
+    stage5HallAtZero = s5;
+    if (s5 && !prevS5Hall) {
+      printlnBoth("S5 HALL: at zero (sensor)");
+    } else if (!s5 && prevS5Hall) {
+      printlnBoth("S5 HALL: left zero zone");
+    }
+  }
 
-  printlnBoth("[SENSOR] " + msg);
+  bool stateChanged = (prevS2 != stage2LimitHit) ||
+                      (prevS3 != stage3LimitHit) ||
+                      (prevS4 != stage4LimitHit) ||
+                      (prevS5Hall != stage5HallAtZero);
+  if (stateChanged || msg != lastSensorLimMsg) {
+    printlnBoth("[SENSOR] " + msg);
+    lastSensorLimMsg = msg;
+  }
 }
 
 void serviceSensorUART() {
@@ -216,7 +302,7 @@ void serviceSensorUART() {
 // Stage 2:  s2down -> forward=false (blocked by limit)
 // Stage 3:  s3down -> forward=true  (blocked by limit)
 // Stage 4:  s4down -> forward=true  (blocked by limit)
-// Stage 1, 5: no limit switches
+// Stage 5: no limit switch blocking (Hall S5H is for homing only, not hard stop)
 // =========================
 bool shouldStopMotor(int motorIndex, bool forward) {
   if (motorIndex == STAGE2_RIGHT || motorIndex == STAGE2_LEFT) {
@@ -789,6 +875,139 @@ void runParallel(const String &cmdList) {
   printlnBoth(ok ? "PAR: done" : "PAR: aborted");
 }
 
+void applyPositionState(long p[NUM_DRIVERS]) {
+  enforceStage2PairTarget(p);
+  for (int i = 0; i < NUM_DRIVERS; i++) currentPos[i] = p[i];
+}
+
+static const int HOME_CHUNK_STEPS = 40;
+static const long HOME_MAX_SEEK_STEPS = 250000L;
+
+bool homeStage1SoftZero() {
+  if (estopLatched) return false;
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE1] = 0;
+  applyPositionState(p);
+  printlnBoth("HOME S1: soft zero (C6=0 at current position)");
+  return true;
+}
+
+bool homeStage2ToLimit() {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage2LimitHit) break;
+    long chunk = HOME_CHUNK_STEPS;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
+    if (chunk <= 0) break;
+    if (!stepStage2(false, (int)chunk)) return false;
+    moved += chunk;
+  }
+  if (!stage2LimitHit) {
+    printlnBoth("HOME S2: limit not reached");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE2_RIGHT] = 0;
+  p[STAGE2_LEFT] = 0;
+  applyPositionState(p);
+  printlnBoth("HOME S2: zero at limit");
+  return true;
+}
+
+bool homeStage3ToLimit() {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage3LimitHit) break;
+    long chunk = HOME_CHUNK_STEPS;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
+    if (chunk <= 0) break;
+    if (!stepMotor(STAGE3, true, (int)chunk)) return false;
+    moved += chunk;
+  }
+  if (!stage3LimitHit) {
+    printlnBoth("HOME S3: limit not reached");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE3] = 0;
+  applyPositionState(p);
+  printlnBoth("HOME S3: zero at limit");
+  return true;
+}
+
+bool homeStage4ToLimit() {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage4LimitHit) break;
+    long chunk = HOME_CHUNK_STEPS;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
+    if (chunk <= 0) break;
+    if (!stepMotor(STAGE4, true, (int)chunk)) return false;
+    moved += chunk;
+  }
+  if (!stage4LimitHit) {
+    printlnBoth("HOME S4: limit not reached");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE4] = 0;
+  applyPositionState(p);
+  printlnBoth("HOME S4: zero at limit");
+  return true;
+}
+
+bool homeStage5ToHall() {
+  serviceSensorUART();
+  if (estopLatched) return false;
+
+  if (stage5HallAtZero) {
+    long p[NUM_DRIVERS];
+    for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+    p[STAGE5] = 0;
+    applyPositionState(p);
+    printlnBoth("HOME S5: already at hall, C5=0");
+    return true;
+  }
+
+  const bool dirs[2] = { true, false };
+  for (int d = 0; d < 2; d++) {
+    long moved = 0;
+    while (moved < HOME_MAX_SEEK_STEPS) {
+      pollEmergencyInputs();
+      serviceSensorUART();
+      if (estopLatched) return false;
+      if (stage5HallAtZero) {
+        long p[NUM_DRIVERS];
+        for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+        p[STAGE5] = 0;
+        applyPositionState(p);
+        printlnBoth("HOME S5: zero at hall");
+        return true;
+      }
+      long chunk = HOME_CHUNK_STEPS;
+      if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
+      if (chunk <= 0) break;
+      if (!stepMotor(STAGE5, dirs[d], (int)chunk)) return false;
+      moved += chunk;
+    }
+  }
+  printlnBoth("HOME S5: hall not found (check S5H / HW-477 / magnet; try home s5 from other side)");
+  return false;
+}
+
 void printHelp() {
   printlnBoth("");
   printlnBoth("Stage commands:");
@@ -839,10 +1058,13 @@ void printHelp() {
   printlnBoth("  speed 800     -> set pulse delay in microseconds");
   printlnBoth("  where         -> print current tracked positions");
   printlnBoth("  setpos p1 p2 p3 p4 p5 p6 -> overwrite tracked positions");
+  printlnBoth("  home s1       -> soft zero turntable (C6=0 here)");
+  printlnBoth("  home s2..s4   -> drive to limit switches, then zero those axes");
+  printlnBoth("  home s5       -> find Hall zero (S5H), then zero C5");
   printlnBoth("  estop         -> latch emergency stop (blocks all motion)");
   printlnBoth("  estop clear   -> clear e-stop latch");
   printlnBoth("  estop status  -> print e-stop state");
-  printlnBoth("  limits        -> print latest limit states");
+  printlnBoth("  limits        -> request fresh LIM (+S5H hall) from sensor, print state");
   printlnBoth("");
 
   printlnBoth("MOSFET / attachment commands:");
@@ -877,6 +1099,13 @@ void handleCommand(String cmd) {
   }
 
   if (cmd == "limits") {
+    // Ask sensor board for a fresh LIM line (includes S5H Hall-at-zero).
+    SensorSerial.println("STATUS");
+    unsigned long t0 = millis();
+    while (millis() - t0 < 80) {
+      serviceSensorUART();
+      pollEmergencyInputs();
+    }
     printLimitStatus();
     return;
   }
@@ -896,6 +1125,25 @@ void handleCommand(String cmd) {
 
   if (cmd == "estop status") {
     printlnBoth(String("ESTOP=") + (estopLatched ? "1" : "0"));
+    return;
+  }
+
+  if (cmd.startsWith("home ")) {
+    String h = cmd.substring(5);
+    h.trim();
+    if (h == "s1") {
+      homeStage1SoftZero();
+    } else if (h == "s2") {
+      homeStage2ToLimit();
+    } else if (h == "s3") {
+      homeStage3ToLimit();
+    } else if (h == "s4") {
+      homeStage4ToLimit();
+    } else if (h == "s5") {
+      homeStage5ToHall();
+    } else {
+      printlnBoth("Usage: home s1 | home s2 | home s3 | home s4 | home s5");
+    }
     return;
   }
 
@@ -1222,18 +1470,28 @@ void readFromSerial() {
   }
 }
 
-void readFromBluetooth() {
-  while (SerialBT.available()) {
-    char c = (char)SerialBT.read();
+void readFromWiFi() {
+  if (!commandClient || !commandClient.connected()) {
+    WiFiClient incoming = CommandServer.available();
+    if (incoming) {
+      if (commandClient && commandClient.connected()) commandClient.stop();
+      commandClient = incoming;
+      commandClient.println("Connected to ME424 main board WiFi command socket.");
+    }
+  }
 
-    if (c == '\r') continue;
-    if (c == '\n') {
-      if (btBuffer.length() > 0) {
-        handleCommand(btBuffer);
-        btBuffer = "";
+  if (commandClient && commandClient.connected()) {
+    while (commandClient.available()) {
+      char c = (char)commandClient.read();
+      if (c == '\r') continue;
+      if (c == '\n') {
+        if (wifiBuffer.length() > 0) {
+          handleCommand(wifiBuffer);
+          wifiBuffer = "";
+        }
+      } else {
+        wifiBuffer += c;
       }
-    } else {
-      btBuffer += c;
     }
   }
 }
@@ -1264,9 +1522,53 @@ void setup() {
 
   Serial.begin(115200);
 
-  if (!SerialBT.begin("ESP32_STAGE_CTRL")) {
-    Serial.println("Bluetooth init failed");
-    while (true) delay(1000);
+  if (String(WIFI_SSID).length() > 0) {
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(WIFI_HOSTNAME);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.print("WiFi connecting");
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) {
+      delay(250);
+      Serial.print(".");
+    }
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED) {
+      ArduinoOTA.setHostname(WIFI_HOSTNAME);
+      ArduinoOTA.begin();
+      CommandServer.begin();
+      Serial.println("WiFi connected: " + WiFi.localIP().toString());
+      Serial.println(String("WiFi command port: ") + 3333);
+
+      if (LittleFS.begin(true)) {
+        // Explicit routes — ESP32 serveStatic often does not map "/" -> index.html.
+        httpServer.on("/", HTTP_GET, []() { httpSendLittleFSFile("/index.html", "text/html"); });
+        httpServer.on("/index.html", HTTP_GET, []() { httpSendLittleFSFile("/index.html", "text/html"); });
+        httpServer.on("/app.js", HTTP_GET, []() { httpSendLittleFSFile("/app.js", "application/javascript"); });
+        httpServer.on("/styles.css", HTTP_GET, []() { httpSendLittleFSFile("/styles.css", "text/css"); });
+        httpServer.onNotFound([]() {
+          httpServer.send(404, "text/plain", "Not found (expected /, /app.js, /styles.css)");
+        });
+        httpServer.begin();
+        httpServerLive = true;
+        Serial.println("Web UI: http://" + WiFi.localIP().toString() + "/");
+        Serial.println(String("LittleFS index.html: ") + (LittleFS.exists("/index.html") ? "yes" : "NO"));
+        Serial.println(String("LittleFS app.js: ") + (LittleFS.exists("/app.js") ? "yes" : "NO"));
+        Serial.println(String("LittleFS styles.css: ") + (LittleFS.exists("/styles.css") ? "yes" : "NO"));
+      } else {
+        Serial.println("LittleFS mount failed (run: pio run -e main_board -t uploadfs)");
+      }
+
+      webSocket.onEvent(webSocketEvent);
+      webSocket.begin();
+      webSocketLive = true;
+      Serial.println(String("WebSocket commands: ws://") + WiFi.localIP().toString() + ":81/");
+    } else {
+      Serial.println("WiFi connect failed, continuing without WiFi/OTA");
+    }
+  } else {
+    Serial.println("WiFi disabled (set WIFI_SSID/WIFI_PASSWORD build flags)");
   }
 
   SlaveSerial.begin(SLAVE_BAUD, SERIAL_8N1, SLAVE_RX_PIN, SLAVE_TX_PIN);
@@ -1275,15 +1577,21 @@ void setup() {
   delay(1000);
 
   printlnBoth("Main board ready");
-  printlnBoth("Bluetooth name: ESP32_STAGE_CTRL");
+  printlnBoth("USB serial + WiFi (TCP 3333 / WebSocket 81) + HTTP UI on /");
   printlnBoth("UART2 to MOSFET slave ready");
   printlnBoth("UART1 to sensor board ready");
+  if (WiFi.status() == WL_CONNECTED) {
+    printlnBoth("OTA host: " + String(WIFI_HOSTNAME) + ".local");
+  }
   printHelp();
 }
 
 void loop() {
   readFromSerial();
-  readFromBluetooth();
+  readFromWiFi();
   readFromSlave();
   serviceSensorUART();
+  if (httpServerLive) httpServer.handleClient();
+  if (webSocketLive) webSocket.loop();
+  if (WiFi.status() == WL_CONNECTED) ArduinoOTA.handle();
 }

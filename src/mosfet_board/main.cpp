@@ -1,4 +1,16 @@
 #include <Arduino.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD ""
+#endif
+#ifndef WIFI_HOSTNAME
+#define WIFI_HOSTNAME "me424-mosfet"
+#endif
 
 // Use UART1 on remapped pins
 HardwareSerial MainSerial(1);
@@ -116,6 +128,23 @@ void setup() {
   Serial.begin(115200);
   MainSerial.begin(UART_BAUD, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
 
+  if (String(WIFI_SSID).length() > 0) {
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(WIFI_HOSTNAME);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) delay(250);
+    if (WiFi.status() == WL_CONNECTED) {
+      ArduinoOTA.setHostname(WIFI_HOSTNAME);
+      ArduinoOTA.begin();
+      Serial.println("WiFi connected: " + WiFi.localIP().toString());
+    } else {
+      Serial.println("WiFi connect failed (OTA disabled)");
+    }
+  } else {
+    Serial.println("WiFi disabled (set WIFI_SSID/WIFI_PASSWORD build flags)");
+  }
+
   delay(500);
   Serial.println("MOSFET slave ready");
   sendAck("SLAVE READY");
@@ -135,4 +164,5 @@ void loop() {
       uartBuffer += c;
     }
   }
+  if (WiFi.status() == WL_CONNECTED) ArduinoOTA.handle();
 }
