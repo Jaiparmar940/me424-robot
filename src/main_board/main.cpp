@@ -882,6 +882,9 @@ void applyPositionState(long p[NUM_DRIVERS]) {
 
 static const int HOME_CHUNK_STEPS = 40;
 static const long HOME_MAX_SEEK_STEPS = 250000L;
+// Stage 5 Hall seek: slower pulse + smaller chunks (does not change global `speed` / manual jog).
+static const int HOME_S5_CHUNK_STEPS = 24;
+static const int HOME_S5_PULSE_DELAY_US = 2400;
 
 bool homeStage1SoftZero() {
   if (estopLatched) return false;
@@ -982,28 +985,39 @@ bool homeStage5ToHall() {
     return true;
   }
 
+  const int savedPulse = pulseDelayUs;
+  pulseDelayUs = HOME_S5_PULSE_DELAY_US;
+
   const bool dirs[2] = { true, false };
   for (int d = 0; d < 2; d++) {
     long moved = 0;
     while (moved < HOME_MAX_SEEK_STEPS) {
       pollEmergencyInputs();
       serviceSensorUART();
-      if (estopLatched) return false;
+      if (estopLatched) {
+        pulseDelayUs = savedPulse;
+        return false;
+      }
       if (stage5HallAtZero) {
         long p[NUM_DRIVERS];
         for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
         p[STAGE5] = 0;
         applyPositionState(p);
         printlnBoth("HOME S5: zero at hall");
+        pulseDelayUs = savedPulse;
         return true;
       }
-      long chunk = HOME_CHUNK_STEPS;
+      long chunk = HOME_S5_CHUNK_STEPS;
       if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
       if (chunk <= 0) break;
-      if (!stepMotor(STAGE5, dirs[d], (int)chunk)) return false;
+      if (!stepMotor(STAGE5, dirs[d], (int)chunk)) {
+        pulseDelayUs = savedPulse;
+        return false;
+      }
       moved += chunk;
     }
   }
+  pulseDelayUs = savedPulse;
   printlnBoth("HOME S5: hall not found (check S5H / HW-477 / magnet; try home s5 from other side)");
   return false;
 }
