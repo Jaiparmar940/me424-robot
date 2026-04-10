@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ME424 Robot Console</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header>
+    <h1>ME424 Robot Control App</h1>
+    <div class="toolbar">
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <button id="refreshPosBtn" disabled>Refresh Positions</button>
+      <span id="connStatus" class="badge">Disconnected</span>
+      <label class="robot-host-label">Robot host (WebSocket)
+        <input id="robotHost" type="text" value="me424-main.local" spellcheck="false" autocomplete="off" />
+      </label>
+    </div>
+    <p class="hint toolbar-hint">Open this page from the ESP32 (<code>http://me424-main.local/</code>) for the simplest setup. If you use <code>http://localhost:8080/app/</code>, set <strong>Robot host</strong> to the main board (saved in the browser). Add <code>?usb=1</code> to force USB serial.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Manual Control</h2>
+      <div class="row">
+        <label>Step Size
+          <input id="stepSize" type="number" min="1" value="200" />
+        </label>
+        <label>Manual Pulse Delay (us)
+          <input id="manualPulseDelay" type="number" min="100" value="1200" />
+        </label>
+        <label>Jog Speed (maxSps)
+          <input id="jogMaxSps" type="number" min="10" value="1200" />
+        </label>
+        <label>Ramp Steps
+          <input id="jogRamp" type="number" min="1" value="150" />
+        </label>
+      </div>
+      <div id="axisGrid" class="axis-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>Zero / Home</h2>
+      <div class="row wrap">
+        <button id="zeroAllBtn" disabled>Set Current as Zero (All)</button>
+        <button id="home234Btn" disabled>Home Stages 2–4 (limits)</button>
+      </div>
+      <p class="hint">Use <strong>Auto home</strong> under each axis for firmware homing: <code>home s1</code> soft-zeros the turntable; <code>home s2</code>–<code>home s4</code> seek limits then zero; <code>home s5</code> seeks the Hall zero (sensor GPIO14 / HW-477; <code>limits</code> shows <code>S5H=0</code> at zero) then zeros C5. Stage 5 Hall does not block motion—only used for homing.</p>
+    </section>
+
+    <section class="card">
+      <h2>Record Sequence</h2>
+      <div class="row wrap">
+        <button id="recordPoseBtn" disabled>Record Current Pose</button>
+        <label>Delay (ms)
+          <input id="delayMs" type="number" min="0" value="500" />
+        </label>
+        <button id="addDelayBtn" disabled>Add Delay</button>
+      </div>
+      <div class="row wrap">
+        <label>MOSFET Action
+          <select id="mosfetAction">
+            <option value="mag on">mag on</option>
+            <option value="mag off">mag off</option>
+            <option value="vac on">vac on</option>
+            <option value="vac off">vac off</option>
+            <option value="saw on">saw on</option>
+            <option value="saw off">saw off</option>
+            <option value="alloff">alloff</option>
+            <option value="mstatus">mstatus</option>
+          </select>
+        </label>
+        <button id="addMosfetBtn" disabled>Add MOSFET Action</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Playback</h2>
+      <div class="row wrap">
+        <label>Playback maxSps
+          <input id="playbackMaxSps" type="number" min="10" value="1000" />
+        </label>
+        <label>Playback rampSteps
+          <input id="playbackRamp" type="number" min="1" value="200" />
+        </label>
+        <button id="runSequenceBtn" disabled>Run Sequence</button>
+        <button id="stopSequenceBtn" disabled>Stop (soft)</button>
+      </div>
+      <p class="hint">Pose-to-pose motion uses firmware command: <code>syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps</code>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Saved Sequence</h2>
+      <div class="row wrap">
+        <button id="clearSeqBtn">Clear</button>
+        <button id="saveLocalBtn">Save Local</button>
+        <button id="loadLocalBtn">Load Local</button>
+        <button id="exportBtn">Export JSON</button>
+        <label class="file-label">Import JSON
+          <input id="importInput" type="file" accept="application/json" />
+        </label>
+      </div>
+      <ol id="sequenceList" class="seq-list"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Console</h2>
+      <div class="row wrap">
+        <input id="manualCmd" type="text" placeholder="Type firmware command..." />
+        <button id="sendCmdBtn" disabled>Send</button>
+      </div>
+      <pre id="logBox" class="log"></pre>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
