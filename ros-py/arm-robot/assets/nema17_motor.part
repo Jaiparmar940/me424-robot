@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "8472807b50cd858b2225f432",
+    "documentMicroversion": "33b2f5a386c4b56a8e901af8",
+    "elementId": "eb16d8464068592fe2879892",
+    "fullConfiguration": "default",
+    "id": "Mh+7EaguigPnBZkDS",
+    "isStandardContent": false,
+    "name": "NEMA17_Motor <4>",
+    "partId": "JHD",
+    "suppressed": false,
+    "type": "Part"
+}
