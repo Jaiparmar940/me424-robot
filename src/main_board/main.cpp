@@ -6,13 +6,13 @@
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 
-// Version 12.1
+// Version 12.2
 
 #ifndef WIFI_SSID
-#define WIFI_SSID ""
+#define WIFI_SSID "surgical_clanker2.4"
 #endif
 #ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD ""
+#define WIFI_PASSWORD "bone_saw"
 #endif
 #ifndef WIFI_HOSTNAME
 #define WIFI_HOSTNAME "me424-main"

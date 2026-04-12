@@ -1,0 +1,13 @@
+{
+    "configuration": "default",
+    "documentId": "8472807b50cd858b2225f432",
+    "documentMicroversion": "33b2f5a386c4b56a8e901af8",
+    "elementId": "5a5de9212558d36934c9df57",
+    "fullConfiguration": "default",
+    "id": "Mp8JE12aeJQK3xzcI",
+    "isStandardContent": false,
+    "name": "NEMA23_5:1_PlanetaryGearbox <3>",
+    "partId": "JHD",
+    "suppressed": false,
+    "type": "Part"
+}

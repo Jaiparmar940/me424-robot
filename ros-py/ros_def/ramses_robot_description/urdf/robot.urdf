@@ -1,0 +1,1918 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/8472807b50cd858b2225f432/w/af6412a598c62ec86f588f8f/e/c668aec43c9d4697d7b8e138 -->
+<robot name="ramses_robot">
+
+  <link name="world"/>
+
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="b_turntablebase_001"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Link b_turntablebase_001 -->
+  <link name="b_turntablebase_001">
+    <inertial>
+      <origin xyz="8.72341e-05 0.0429888 0.00589545" rpy="0 0 0"/>
+      <mass value="7.61097"/>
+      <inertia ixx="1.08774" ixy="7.26335e-05" ixz="-0.00322624" iyy="1.03794" iyz="0.0032591" izz="2.0946"/>
+    </inertial>
+    <!-- Part b_motorplate_010 -->
+    <visual>
+      <origin xyz="0 0 -0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_motorplate_010.stl"/>
+      </geometry>
+      <material name="b_motorplate_010_material">
+        <color rgba="0.701961 0.682353 0.623529 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_motorplate_010.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part b_limitmount_017 -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_limitmount_017.stl"/>
+      </geometry>
+      <material name="b_limitmount_017_material">
+        <color rgba="0.498039 0.498039 0.498039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_limitmount_017.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part ds_centraldockadapter_001 -->
+    <visual>
+      <origin xyz="3.48756e-06 -6.04062e-06 0.022225" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/ds_centraldockadapter_001.stl"/>
+      </geometry>
+      <material name="ds_centraldockadapter_001_material">
+        <color rgba="0.262745 0.282353 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.48756e-06 -6.04062e-06 0.022225" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/ds_centraldockadapter_001.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part b_tensionstandoff_011 -->
+    <visual>
+      <origin xyz="0 0 -0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_tensionstandoff_011.stl"/>
+      </geometry>
+      <material name="b_tensionstandoff_011_material">
+        <color rgba="0.713725 0.760784 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_tensionstandoff_011.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part b_turntablebase_001 -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_turntablebase_001.stl"/>
+      </geometry>
+      <material name="b_turntablebase_001_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_turntablebase_001.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part ds_rightframe_003 -->
+    <visual>
+      <origin xyz="3.48756e-06 -6.04062e-06 0.022225" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/ds_rightframe_003.stl"/>
+      </geometry>
+      <material name="ds_rightframe_003_material">
+        <color rgba="0.439216 0.47451 0.501961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.48756e-06 -6.04062e-06 0.022225" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/ds_rightframe_003.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part ds_leftframe_002 -->
+    <visual>
+      <origin xyz="3.48756e-06 -6.04062e-06 0.022225" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/ds_leftframe_002.stl"/>
+      </geometry>
+      <material name="ds_leftframe_002_material">
+        <color rgba="0.439216 0.47451 0.501961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.48756e-06 -6.04062e-06 0.022225" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/ds_leftframe_002.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_2_0nm -->
+    <visual>
+      <origin xyz="0 -0.1524 0.015875" rpy="1.5708 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+      <material name="nema23_2_0nm_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.1524 0.015875" rpy="1.5708 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part b_pvcmount_012 -->
+    <visual>
+      <origin xyz="0 0.0004064 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_pvcmount_012.stl"/>
+      </geometry>
+      <material name="b_pvcmount_012_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0.0004064 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/b_pvcmount_012.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546 -->
+    <visual>
+      <origin xyz="-2.54e-05 0.0461137 0.10795" rpy="3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-2.54e-05 0.0461137 0.10795" rpy="3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_624 -->
+    <visual>
+      <origin xyz="3.81e-05 0.046101 -0.0952246" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_624_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.81e-05 0.046101 -0.0952246" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting -->
+    <visual>
+      <origin xyz="-0.636168 -0.217411 -0.0785558" rpy="-1.5708 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.636168 -0.217411 -0.0785558" rpy="-1.5708 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_5 -->
+    <visual>
+      <origin xyz="-0.365722 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_5_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.365722 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting -->
+    <visual>
+      <origin xyz="0.521669 0.567796 -0.12065" rpy="1.5708 0 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.521669 0.567796 -0.12065" rpy="1.5708 0 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218 -->
+    <visual>
+      <origin xyz="1.27e-05 0.0460629 -0.0952373" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.27e-05 0.0460629 -0.0952373" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_5_2 -->
+    <visual>
+      <origin xyz="-0.162459 -0.116383 -0.566356" rpy="1.5708 0.785398 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_5_2_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.162459 -0.116383 -0.566356" rpy="1.5708 0.785398 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_2 -->
+    <visual>
+      <origin xyz="0.377985 0.424112 -0.12065" rpy="1.5708 0 2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_2_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.377985 0.424112 -0.12065" rpy="1.5708 0 2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting -->
+    <visual>
+      <origin xyz="-0.636168 -0.217411 0.00635" rpy="1.5708 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.636168 -0.217411 0.00635" rpy="1.5708 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_624_2 -->
+    <visual>
+      <origin xyz="-0 0.0461137 0.10795" rpy="-3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_624_2_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0.0461137 0.10795" rpy="-3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_3 -->
+    <visual>
+      <origin xyz="0.365722 0.0460883 -0.09525" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_3_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.365722 0.0460883 -0.09525" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_2 -->
+    <visual>
+      <origin xyz="-0.636168 0.309613 0.00635" rpy="1.5708 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_2_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.636168 0.309613 0.00635" rpy="1.5708 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_3 -->
+    <visual>
+      <origin xyz="0.263512 -0.590067 0.00635" rpy="1.5708 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_3_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.263512 -0.590067 0.00635" rpy="1.5708 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_2 -->
+    <visual>
+      <origin xyz="-1.27e-05 0.0461391 -0.0103315" rpy="-0 -0 3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_2_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27e-05 0.0461391 -0.0103315" rpy="-0 -0 3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_4 -->
+    <visual>
+      <origin xyz="0.521669 -0.475594 -0.12065" rpy="1.5708 0 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_4_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.521669 -0.475594 -0.12065" rpy="1.5708 0 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_3 -->
+    <visual>
+      <origin xyz="-3.81e-05 -0.480936 -0.0952373" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_3_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-3.81e-05 -0.480936 -0.0952373" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_2 -->
+    <visual>
+      <origin xyz="-0.527037 0.0461264 0.10795" rpy="-3.14159 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_2_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.527037 0.0461264 0.10795" rpy="-3.14159 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_624_3 -->
+    <visual>
+      <origin xyz="0 0.0460629 -0.0952246" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_624_3_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0.0460629 -0.0952246" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_4 -->
+    <visual>
+      <origin xyz="-1.27e-05 0.0461391 -0.0952373" rpy="-0 -0 3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_4_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27e-05 0.0461391 -0.0952373" rpy="-0 -0 3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_5 -->
+    <visual>
+      <origin xyz="-3.81e-05 0.0460883 -0.0103315" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_5_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-3.81e-05 0.0460883 -0.0103315" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_6 -->
+    <visual>
+      <origin xyz="3.81e-05 0.573138 -0.0952373" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_6_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.81e-05 0.573138 -0.0952373" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_2 -->
+    <visual>
+      <origin xyz="0.263512 0.682269 -0.0785558" rpy="-1.5708 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_2_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.263512 0.682269 -0.0785558" rpy="-1.5708 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_5 -->
+    <visual>
+      <origin xyz="0.377985 -0.33191 -0.12065" rpy="1.5708 -0 0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_5_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.377985 -0.33191 -0.12065" rpy="1.5708 -0 0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_6 -->
+    <visual>
+      <origin xyz="-0.521669 -0.475594 -0.12065" rpy="1.5708 0 2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_6_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.521669 -0.475594 -0.12065" rpy="1.5708 0 2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_624_4 -->
+    <visual>
+      <origin xyz="-3.81e-05 0.046101 -0.0952246" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_624_4_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-3.81e-05 0.046101 -0.0952246" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_5_3 -->
+    <visual>
+      <origin xyz="-0.737221 0.783296 0.687774" rpy="-1.5708 -0.785398 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_5_3_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.737221 0.783296 0.687774" rpy="-1.5708 -0.785398 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_4 -->
+    <visual>
+      <origin xyz="0.263512 -0.217411 0.00635" rpy="-0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_4_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.263512 -0.217411 0.00635" rpy="-0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_7 -->
+    <visual>
+      <origin xyz="-0.527037 0.0461391 -0.0103315" rpy="0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_7_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.527037 0.0461391 -0.0103315" rpy="0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_8 -->
+    <visual>
+      <origin xyz="-3.81e-05 0.0460883 -0.0952373" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_8_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-3.81e-05 0.0460883 -0.0952373" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_9 -->
+    <visual>
+      <origin xyz="0.527037 0.0460629 -0.0103315" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_9_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.527037 0.0460629 -0.0103315" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_3 -->
+    <visual>
+      <origin xyz="0.263512 -0.590067 -0.0785558" rpy="-1.5708 -0 3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_3_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.263512 -0.590067 -0.0785558" rpy="-1.5708 -0 3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_5 -->
+    <visual>
+      <origin xyz="0.263512 0.682269 0.00635" rpy="1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_5_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.263512 0.682269 0.00635" rpy="1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_4 -->
+    <visual>
+      <origin xyz="-0.636168 0.309613 -0.0785558" rpy="-1.5708 -0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_4_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.636168 0.309613 -0.0785558" rpy="-1.5708 -0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_3 -->
+    <visual>
+      <origin xyz="-1.27e-05 0.0461264 0.10795" rpy="-3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_3_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27e-05 0.0461264 0.10795" rpy="-3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_7 -->
+    <visual>
+      <origin xyz="-0.521695 0.56777 0.242068" rpy="-1.5708 0 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_7_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.521695 0.56777 0.242068" rpy="-1.5708 0 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_8 -->
+    <visual>
+      <origin xyz="-0.378011 0.424086 0.242068" rpy="-1.5708 -0 0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_8_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.378011 0.424086 0.242068" rpy="-1.5708 -0 0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_9 -->
+    <visual>
+      <origin xyz="-0.0152781 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_9_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0152781 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_4 -->
+    <visual>
+      <origin xyz="-1.27e-05 0.0460756 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_4_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27e-05 0.0460756 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_10 -->
+    <visual>
+      <origin xyz="-0.377985 -0.33191 -0.12065" rpy="1.5708 0 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_10_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.377985 -0.33191 -0.12065" rpy="1.5708 0 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_10 -->
+    <visual>
+      <origin xyz="3.81e-05 0.0461137 -0.0952373" rpy="0 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_10_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.81e-05 0.0461137 -0.0952373" rpy="0 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_6 -->
+    <visual>
+      <origin xyz="-0.263512 0.682269 0.00635" rpy="1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_6_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.263512 0.682269 0.00635" rpy="1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_11 -->
+    <visual>
+      <origin xyz="0.527037 0.0460629 -0.0952373" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_11_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.527037 0.0460629 -0.0952373" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_7 -->
+    <visual>
+      <origin xyz="0.636168 0.309613 0.00635" rpy="1.5708 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_7_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.636168 0.309613 0.00635" rpy="1.5708 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_cross_pipe -->
+    <visual>
+      <origin xyz="0.0005969 0.002032 -0.09525" rpy="-0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_cross_pipe.stl"/>
+      </geometry>
+      <material name="tc_cross_pipe_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0005969 0.002032 -0.09525" rpy="-0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_cross_pipe.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_12 -->
+    <visual>
+      <origin xyz="-3.81e-05 -0.480936 -0.0103315" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_12_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-3.81e-05 -0.480936 -0.0103315" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_5_4 -->
+    <visual>
+      <origin xyz="0.737195 0.783322 -0.566356" rpy="1.5708 0.785398 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_5_4_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.737195 0.783322 -0.566356" rpy="1.5708 0.785398 -0.785398"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_5 -->
+    <visual>
+      <origin xyz="-0.263512 0.682269 -0.0785558" rpy="-1.5708 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_5_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.263512 0.682269 -0.0785558" rpy="-1.5708 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_624_5 -->
+    <visual>
+      <origin xyz="0 0.0461391 -0.0952246" rpy="-0 -0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_624_5_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0.0461391 -0.0952246" rpy="-0 -0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_13 -->
+    <visual>
+      <origin xyz="-0.527037 0.0461391 -0.0952373" rpy="-0 -0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_13_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.527037 0.0461391 -0.0952373" rpy="-0 -0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_8 -->
+    <visual>
+      <origin xyz="-0.263512 0.309613 0.00635" rpy="3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_8_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.263512 0.309613 0.00635" rpy="3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_5 -->
+    <visual>
+      <origin xyz="-0.899705 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_5_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.899705 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_9 -->
+    <visual>
+      <origin xyz="-0.263512 -0.217411 0.00635" rpy="-0 -0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_9_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.263512 -0.217411 0.00635" rpy="-0 -0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_10 -->
+    <visual>
+      <origin xyz="0.636168 -0.217411 0.00635" rpy="1.5708 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_10_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.636168 -0.217411 0.00635" rpy="1.5708 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_6 -->
+    <visual>
+      <origin xyz="-0.263512 -0.590067 -0.0785558" rpy="-1.5708 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_6_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.263512 -0.590067 -0.0785558" rpy="-1.5708 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_5_5 -->
+    <visual>
+      <origin xyz="0.737195 -0.69112 -0.566356" rpy="1.5708 0.785398 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_5_5_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.737195 -0.69112 -0.566356" rpy="1.5708 0.785398 -2.35619"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_6 -->
+    <visual>
+      <origin xyz="-0.527037 0.0460756 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_6_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.527037 0.0460756 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_14 -->
+    <visual>
+      <origin xyz="3.81e-05 0.0461137 -0.0103315" rpy="0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_14_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.81e-05 0.0461137 -0.0103315" rpy="0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_11 -->
+    <visual>
+      <origin xyz="-0.263512 -0.590067 0.00635" rpy="1.5708 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_11_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.263512 -0.590067 0.00635" rpy="1.5708 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_7 -->
+    <visual>
+      <origin xyz="0.636168 -0.217411 -0.0785558" rpy="-1.5708 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_7_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.636168 -0.217411 -0.0785558" rpy="-1.5708 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_11 -->
+    <visual>
+      <origin xyz="0.0152781 0.0460883 -0.09525" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_11_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0152781 0.0460883 -0.09525" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_15 -->
+    <visual>
+      <origin xyz="1.27e-05 0.0460629 -0.0103315" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_15_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.27e-05 0.0460629 -0.0103315" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_2_218_16 -->
+    <visual>
+      <origin xyz="3.81e-05 0.573138 -0.0103315" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+      <material name="tc_pvc_2_218_16_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.81e-05 0.573138 -0.0103315" rpy="-0 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_2_218.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_5_6 -->
+    <visual>
+      <origin xyz="-0.0152781 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_5_6_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0152781 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_5.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_slidingtfitting_12 -->
+    <visual>
+      <origin xyz="-0.365722 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+      <material name="tc_slidingtfitting_12_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.365722 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_slidingtfitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_dropdownslider -->
+    <visual>
+      <origin xyz="-0.437553 0.002032 -0.09525" rpy="-0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_dropdownslider.stl"/>
+      </geometry>
+      <material name="tc_dropdownslider_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.437553 0.002032 -0.09525" rpy="-0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_dropdownslider.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part t_fitting_12 -->
+    <visual>
+      <origin xyz="0.263512 0.309613 0.00635" rpy="3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+      <material name="t_fitting_12_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.263512 0.309613 0.00635" rpy="3.14159 -0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/t_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 90_fitting_8 -->
+    <visual>
+      <origin xyz="0.636168 0.309613 -0.0785558" rpy="-1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+      <material name="90_fitting_8_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.636168 0.309613 -0.0785558" rpy="-1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/90_fitting.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_7 -->
+    <visual>
+      <origin xyz="-2.54e-05 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_7_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-2.54e-05 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_19_624_6 -->
+    <visual>
+      <origin xyz="0 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624__2.stl"/>
+      </geometry>
+      <material name="tc_pvc_19_624_6_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0.0460883 -0.09525" rpy="0 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_19_624__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_pvc_13_546_8 -->
+    <visual>
+      <origin xyz="-0.899705 0.0461137 0.10795" rpy="-3.14159 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+      <material name="tc_pvc_13_546_8_material">
+        <color rgba="0.2 0.215686 0.227451 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.899705 0.0461137 0.10795" rpy="-3.14159 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_pvc_13_546.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part tc_dropdownslider_2 -->
+    <visual>
+      <origin xyz="-0.0883031 0.002032 -0.09525" rpy="-0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_dropdownslider.stl"/>
+      </geometry>
+      <material name="tc_dropdownslider_2_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0883031 0.002032 -0.09525" rpy="-0 0 -3.14159"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/tc_dropdownslider.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link s1_bearingplug_003 -->
+  <link name="s1_bearingplug_003">
+    <inertial>
+      <origin xyz="-0.000130278 1.2507e-05 0.0992505" rpy="0 0 0"/>
+      <mass value="1.95427"/>
+      <inertia ixx="0.0112482" ixy="0.000249142" ixz="4.12975e-06" iyy="0.0100699" iyz="-5.53541e-07" izz="0.00649396"/>
+    </inertial>
+    <!-- Part s1_pile1_006 -->
+    <visual>
+      <origin xyz="-0 0 -0.0036195" rpy="0 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_pile1_006.stl"/>
+      </geometry>
+      <material name="s1_pile1_006_material">
+        <color rgba="0.439216 0.47451 0.501961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0 -0.0036195" rpy="0 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_pile1_006.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s1_ringcore_004 -->
+    <visual>
+      <origin xyz="-0 -0 -0.0036195" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_ringcore_004.stl"/>
+      </geometry>
+      <material name="s1_ringcore_004_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0 -0.0036195" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_ringcore_004.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_2_0nm_2 -->
+    <visual>
+      <origin xyz="-0.0347599 -0.0737362 0.0828307" rpy="0 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+      <material name="nema23_2_0nm_2_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0347599 -0.0737362 0.0828307" rpy="0 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s1_bearingplug_003 -->
+    <visual>
+      <origin xyz="0 -0 -0.0036195" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_bearingplug_003.stl"/>
+      </geometry>
+      <material name="s1_bearingplug_003_material">
+        <color rgba="0.231373 0.380392 0.705882 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0 -0.0036195" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_bearingplug_003.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_5_1_planetarygearbox -->
+    <visual>
+      <origin xyz="-0.0347599 -0.0737362 0.0828307" rpy="-1.5708 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_5_1_planetarygearbox.stl"/>
+      </geometry>
+      <material name="nema23_5_1_planetarygearbox_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0347599 -0.0737362 0.0828307" rpy="-1.5708 0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_5_1_planetarygearbox.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s1_pile2_007 -->
+    <visual>
+      <origin xyz="-0 0 -0.0036195" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_pile2_007.stl"/>
+      </geometry>
+      <material name="s1_pile2_007_material">
+        <color rgba="0.439216 0.47451 0.501961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0 -0.0036195" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_pile2_007.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_2_0nm_3 -->
+    <visual>
+      <origin xyz="0.0347599 0.0737362 0.0828307" rpy="-3.14159 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+      <material name="nema23_2_0nm_3_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0347599 0.0737362 0.0828307" rpy="-3.14159 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s1_slice_008 -->
+    <visual>
+      <origin xyz="-0 0 -0.0036195" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_slice_008.stl"/>
+      </geometry>
+      <material name="s1_slice_008_material">
+        <color rgba="0.701961 0.682353 0.623529 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0 -0.0036195" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s1_slice_008.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_5_1_planetarygearbox_2 -->
+    <visual>
+      <origin xyz="0.0347599 0.0737362 0.0828307" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_5_1_planetarygearbox.stl"/>
+      </geometry>
+      <material name="nema23_5_1_planetarygearbox_2_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0347599 0.0737362 0.0828307" rpy="1.5708 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_5_1_planetarygearbox.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 104t_ringpulley -->
+    <visual>
+      <origin xyz="-5.49926e-06 3.175e-06 0.0251333" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/104t_ringpulley.stl"/>
+      </geometry>
+      <material name="104t_ringpulley_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-5.49926e-06 3.175e-06 0.0251333" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/104t_ringpulley.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link nema23_2_0nm -->
+  <link name="nema23_2_0nm">
+    <inertial>
+      <origin xyz="0.000285325 -0.0920124 -0.0388436" rpy="0 0 0"/>
+      <mass value="1.29278"/>
+      <inertia ixx="0.0125371" ixy="5.22762e-05" ixz="-2.38474e-06" iyy="0.00169325" iyz="6.55739e-05" izz="0.0126829"/>
+    </inertial>
+    <!-- Part s2_pulley_72t -->
+    <visual>
+      <origin xyz="-0 -0 -0.0153278" rpy="0 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_pulley_72t.stl"/>
+      </geometry>
+      <material name="s2_pulley_72t_material">
+        <color rgba="0.811765 0.858824 0.898039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0 -0.0153278" rpy="0 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_pulley_72t.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s2_pulley_72t_2 -->
+    <visual>
+      <origin xyz="-0 -0 -0.061685" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_pulley_72t.stl"/>
+      </geometry>
+      <material name="s2_pulley_72t_2_material">
+        <color rgba="0.811765 0.858824 0.898039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0 -0.061685" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_pulley_72t.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s2_supcover1_027 -->
+    <visual>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_supcover1_027.stl"/>
+      </geometry>
+      <material name="s2_supcover1_027_material">
+        <color rgba="0.34902 0.376471 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_supcover1_027.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s2_infcover2_028 -->
+    <visual>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_infcover2_028.stl"/>
+      </geometry>
+      <material name="s2_infcover2_028_material">
+        <color rgba="0.439216 0.47451 0.501961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_infcover2_028.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s2_supcover2_029 -->
+    <visual>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_supcover2_029.stl"/>
+      </geometry>
+      <material name="s2_supcover2_029_material">
+        <color rgba="0.34902 0.376471 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_supcover2_029.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s2_core_025 -->
+    <visual>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_core_025.stl"/>
+      </geometry>
+      <material name="s2_core_025_material">
+        <color rgba="0.8 0.776471 0.713725 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_core_025.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_2_0nm_4 -->
+    <visual>
+      <origin xyz="0 -0.1397 0.0295148" rpy="-1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+      <material name="nema23_2_0nm_4_material">
+        <color rgba="0.4 0.4 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.1397 0.0295148" rpy="-1.5708 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_2_0nm.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema23_5_1_planetarygearbox_3 -->
+    <visual>
+      <origin xyz="0 -0.1397 0.0295148" rpy="3.14159 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_5_1_planetarygearbox.stl"/>
+      </geometry>
+      <material name="nema23_5_1_planetarygearbox_3_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.1397 0.0295148" rpy="3.14159 0 -1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema23_5_1_planetarygearbox.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s2_infcover1_026 -->
+    <visual>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_infcover1_026.stl"/>
+      </geometry>
+      <material name="s2_infcover1_026_material">
+        <color rgba="0.439216 0.47451 0.501961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.523469 -0.0385064" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s2_infcover1_026.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link nema17_5_1_gearbox -->
+  <link name="nema17_5_1_gearbox">
+    <inertial>
+      <origin xyz="-0.000154674 -0.0786034 -0.0285654" rpy="0 0 0"/>
+      <mass value="0.798546"/>
+      <inertia ixx="0.004849" ixy="4.91847e-06" ixz="4.70131e-06" iyy="0.000701808" iyz="-0.000288908" izz="0.0047538"/>
+    </inertial>
+    <!-- Part s3_cover2_022 -->
+    <visual>
+      <origin xyz="-0 -0.269469 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s3_cover2_022.stl"/>
+      </geometry>
+      <material name="s3_cover2_022_material">
+        <color rgba="0.34902 0.376471 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0.269469 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s3_cover2_022.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema17_5_1_gearbox -->
+    <visual>
+      <origin xyz="0 -0.1143 -0.087122" rpy="-0 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema17_5_1_gearbox.stl"/>
+      </geometry>
+      <material name="nema17_5_1_gearbox_material">
+        <color rgba="0.623529 0.666667 0.701961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.1143 -0.087122" rpy="-0 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema17_5_1_gearbox.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s3_cover1_021 -->
+    <visual>
+      <origin xyz="-0 -0.269469 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s3_cover1_021.stl"/>
+      </geometry>
+      <material name="s3_cover1_021_material">
+        <color rgba="0.34902 0.376471 0.4 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0.269469 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s3_cover1_021.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 48t_pulley -->
+    <visual>
+      <origin xyz="0 -0 -0.054065" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/48t_pulley.stl"/>
+      </geometry>
+      <material name="48t_pulley_material">
+        <color rgba="0.811765 0.858824 0.898039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0 -0.054065" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/48t_pulley.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s3_core_024 -->
+    <visual>
+      <origin xyz="0 -0.269469 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s3_core_024.stl"/>
+      </geometry>
+      <material name="s3_core_024_material">
+        <color rgba="0.8 0.776471 0.713725 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.269469 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s3_core_024.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema17_motor -->
+    <visual>
+      <origin xyz="0 -0.1143 -0.135122" rpy="0 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema17_motor.stl"/>
+      </geometry>
+      <material name="nema17_motor_material">
+        <color rgba="0.301961 0.301961 0.301961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.1143 -0.135122" rpy="0 0 1.5708"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/nema17_motor.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link s4_core_020 -->
+  <link name="s4_core_020">
+    <inertial>
+      <origin xyz="0.000773028 0.0242398 -0.0265345" rpy="0 0 0"/>
+      <mass value="0.374744"/>
+      <inertia ixx="0.000486029" ixy="-7.14359e-06" ixz="2.14052e-06" iyy="0.000269219" iyz="4.54821e-05" izz="0.000524179"/>
+    </inertial>
+    <!-- Part s4_retainer_033 -->
+    <visual>
+      <origin xyz="-0 0.0694436 -0.03175" rpy="1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s4_retainer_033.stl"/>
+      </geometry>
+      <material name="s4_retainer_033_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0.0694436 -0.03175" rpy="1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s4_retainer_033.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s4_cap_032 -->
+    <visual>
+      <origin xyz="-0 0.0694436 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s4_cap_032.stl"/>
+      </geometry>
+      <material name="s4_cap_032_material">
+        <color rgba="0.901961 0.878431 0.811765 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0.0694436 -0.03175" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s4_cap_032.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part composite_part_1 -->
+    <visual>
+      <origin xyz="-0 0.0742061 -0.03175" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/composite_part_1.stl"/>
+      </geometry>
+      <material name="composite_part_1_material">
+        <color rgba="0.917647 0.917647 0.917647 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0.0742061 -0.03175" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/composite_part_1.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 42t_pulley -->
+    <visual>
+      <origin xyz="-0 -0 -0.050073" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/42t_pulley.stl"/>
+      </geometry>
+      <material name="42t_pulley_material">
+        <color rgba="0.811765 0.858824 0.898039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0 -0.050073" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/42t_pulley.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s4_core_020 -->
+    <visual>
+      <origin xyz="-0 0.0662686 -0.03175" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s4_core_020.stl"/>
+      </geometry>
+      <material name="s4_core_020_material">
+        <color rgba="0.8 0.776471 0.713725 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0.0662686 -0.03175" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s4_core_020.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link s5_armconnector_036 -->
+  <link name="s5_armconnector_036">
+    <inertial>
+      <origin xyz="0.000375764 -5.61588e-07 -0.0133012" rpy="0 0 0"/>
+      <mass value="0.0706859"/>
+      <inertia ixx="2.32183e-05" ixy="-5.9133e-08" ixz="-1.94426e-07" iyy="2.43345e-05" iyz="7.67e-10" izz="2.99296e-05"/>
+    </inertial>
+    <!-- Part s5_plug_034 -->
+    <visual>
+      <origin xyz="-0 0 0.009525" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s5_plug_034.stl"/>
+      </geometry>
+      <material name="s5_plug_034_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0 0.009525" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s5_plug_034.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s5_armconnector_036 -->
+    <visual>
+      <origin xyz="-0 0 0.009525" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s5_armconnector_036.stl"/>
+      </geometry>
+      <material name="s5_armconnector_036_material">
+        <color rgba="0.8 0.8 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0 0.009525" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s5_armconnector_036.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part s5_backcap_035 -->
+    <visual>
+      <origin xyz="-0 0 0.009525" rpy="-0 -0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s5_backcap_035.stl"/>
+      </geometry>
+      <material name="s5_backcap_035_material">
+        <color rgba="0.901961 0.901961 0.901961 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0 0 0.009525" rpy="-0 -0 -0"/>
+      <geometry>
+        <mesh filename="package://ramses_robot_description/meshes/s5_backcap_035.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Joint from s4_core_020 to s5_armconnector_036 -->
+  <joint name="s5_wrist_twist" type="revolute">
+    <origin xyz="-0 0.0789686 -0.03175" rpy="1.5708 -0.536359 -0"/>
+    <parent link="s4_core_020"/>
+    <child link="s5_armconnector_036"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-0.536359" upper="5.74683"/>
+  </joint>
+  <!-- Joint from nema17_5_1_gearbox to s4_core_020 -->
+  <joint name="s4_wrist" type="revolute">
+    <origin xyz="-0 -0.2032 -0.0635" rpy="-3.14159 -0 0.687129"/>
+    <parent link="nema17_5_1_gearbox"/>
+    <child link="s4_core_020"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-0.709134" upper="2.22302"/>
+  </joint>
+  <!-- Joint from nema23_2_0nm to nema17_5_1_gearbox -->
+  <joint name="s3_elbow" type="revolute">
+    <origin xyz="0 -0.254 -0.0070104" rpy="-0 0 -1.87906"/>
+    <parent link="nema23_2_0nm"/>
+    <child link="nema17_5_1_gearbox"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-0.0757129" upper="3.32768"/>
+  </joint>
+  <!-- Joint from s1_bearingplug_003 to nema23_2_0nm -->
+  <joint name="s2_shoulder" type="revolute">
+    <origin xyz="-0 -0.0385064 0.179503" rpy="-1.5708 -0.698555 -3.14159"/>
+    <parent link="s1_bearingplug_003"/>
+    <child link="nema23_2_0nm"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.13404" upper="2.26935"/>
+  </joint>
+  <!-- Joint from b_turntablebase_001 to s1_bearingplug_003 -->
+  <joint name="s1_turntable" type="revolute">
+    <origin xyz="-0 0 0.0036195" rpy="0 0 1.61412"/>
+    <parent link="b_turntablebase_001"/>
+    <child link="s1_bearingplug_003"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-2.27734" upper="2.57467"/>
+  </joint>
+  <!-- Tool centre point — attach tool links here -->
+  <link name="tool_frame"/>
+  <joint name="tool_mount" type="fixed">
+    <parent link="s5_armconnector_036"/>
+    <child link="tool_frame"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+  </joint>
+
+</robot>

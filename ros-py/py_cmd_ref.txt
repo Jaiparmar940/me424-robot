@@ -3,8 +3,29 @@ sudo shutdown -h now
 rsync -av --delete ./arm_robot_bridge/ ramses-user@172.28.205.104:~/ros2_ws/src/arm_robot_bridge/
 
 copy py files over to pi:
-scp -r arm_robot_bridge ramses-user@172.28.205.104:/home/ramses-user/ros2_ws/src/
+scp -r ramses_robot_bridge ramses-user@10.194.129.26:/home/ramses-user/ros2_ws/src/
+scp -r ramses_robot_interfaces ramses-user@10.194.129.26:/home/ramses-user/ros2_ws/src/
+scp -r ramses_robot_description ramses-user@10.194.129.26:/home/ramses-user/ros2_ws/src/
 
 every new session:
 source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
+
+executing/building:
+cd ~/ros2_ws
+colcon build --packages-select ramses_robot_interfaces
+colcon build --packages-select ramses_robot_bridge
+source install/setup.bash
+ros2 launch ramses_robot_bridge bridge.launch.py
+
+
+other execution/build:
+cd ~/ros2_ws
+colcon build --packages-select ramses_robot_interfaces ramses_robot_bridge ramses_robot_description
+source install/setup.bash
+ros2 launch ramses_robot_description display.launch.py
+
+
+flashing the esp:
+cd ~/robot_firmware
+pio run -e main_board -t upload

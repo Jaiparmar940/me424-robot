@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>ramses_robot_bridge</name>
+  <name>ramses_robot_interfaces</name>
   <version>0.1.0</version>
   <description>
     ROS2 serial bridge for the ME424 5-DOF robotic arm ESP32 controller.
@@ -9,7 +9,7 @@
     subscriber for fire-and-forget commands. Publishes joint states for
     RViz2 visualisation and structured state topics (estop, limits).
   </description>
-  <maintainer email="you@example.com">Your Name</maintainer>
+  <maintainer email="connorbrannonmitchell@gmail.com">Your Name</maintainer>
   <license>MIT</license>
 
   <!-- Build tools -->

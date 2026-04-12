@@ -140,7 +140,7 @@ class Esp32BridgeNode(Node):
         # Publishers
         # ----------------------------------------------------------
         self._pub_joint_states = self.create_publisher(
-            JointState, '/arm/joint_states', 10,
+            JointState, '/joint_states', 10,
             callback_group=self._pubsub_cbg,
         )
         self._pub_response = self.create_publisher(
@@ -339,48 +339,27 @@ class Esp32BridgeNode(Node):
         cmd = goal_handle.request.command.strip()
         self.get_logger().info(f'Action: executing {cmd!r}')
 
-        result = ArmMove.Result()
-
-        # --- Mark action as active ---
+        # --- Mark action as active and arm the done-event ---
         with self._motion_lock:
-            self._action_active = True
             self._motion_done_event.clear()
             self._motion_done_result = None
+            self._action_active = True
 
         # --- Send the command ---
         self._serial.send_command(cmd)
 
-        # --- Wait for ACK ---
+        # --- Wait for ACK (optimistic — just check for cancel) ---
         ack_deadline = time.monotonic() + ACK_TIMEOUT_S
-        ack_received = False
-
         while time.monotonic() < ack_deadline:
-            # Check for cancellation
             if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-                result.success  = False
-                result.response = 'CANCELLED'
                 with self._motion_lock:
                     self._action_active = False
+                result = ArmMove.Result()
+                result.success  = False
+                result.response = 'CANCELLED'
+                goal_handle.canceled()
                 return result
-
-            # Poll the done event — ACK comes in as an OTHER/response line.
-            # We don't block on ACK specifically; we treat DONE/ERR that
-            # arrive before any DONE_TIMEOUT as implicitly ACK'd.
-            # But we do want to publish feedback when ACK arrives.
-            # The RX dispatcher publishes ACK to /arm/response;
-            # we rely on DONE_TIMEOUT for overall safety.
-            ack_received = True   # optimistic — treat send as implicit ACK
-            break
-
-        if not ack_received:
-            self.get_logger().error(f'Action: ACK timeout for {cmd!r}')
-            result.success  = False
-            result.response = 'ERR timeout waiting for ACK'
-            with self._motion_lock:
-                self._action_active = False
-            goal_handle.abort()
-            return result
+            break  # optimistic ACK
 
         # --- Publish ACK feedback ---
         feedback = ArmMove.Feedback()
@@ -392,11 +371,12 @@ class Esp32BridgeNode(Node):
         is_instant = any(cmd_lower.startswith(ic) for ic in INSTANT_COMMANDS)
 
         if is_instant:
-            self.get_logger().info(f'Action: instant command, not waiting for DONE')
-            result.success  = True
-            result.response = f'DONE {cmd} (instant)'
+            self.get_logger().info('Action: instant command, not waiting for DONE')
             with self._motion_lock:
                 self._action_active = False
+            result = ArmMove.Result()
+            result.success  = True
+            result.response = f'DONE {cmd} (instant)'
             goal_handle.succeed()
             return result
 
@@ -407,35 +387,41 @@ class Esp32BridgeNode(Node):
             self._action_active = False
             done_parsed = self._motion_done_result
 
+        # --- Timeout ---
         if not done or done_parsed is None:
             self.get_logger().error(f'Action: DONE timeout for {cmd!r}')
+            result = ArmMove.Result()
             result.success  = False
-            result.response = f'ERR timeout waiting for DONE'
+            result.response = 'ERR timeout waiting for DONE'
             goal_handle.abort()
             return result
 
-        # --- Handle cancellation that completed during motion ---
+        # --- Cancelled during motion ---
         if goal_handle.is_cancel_requested:
-            goal_handle.canceled()
+            result = ArmMove.Result()
             result.success  = False
             result.response = done_parsed.raw
+            goal_handle.canceled()
             return result
 
         # --- Normal completion ---
+        result = ArmMove.Result()
         if done_parsed.kind == LineType.DONE:
             result.success  = True
             result.response = done_parsed.raw
-            goal_handle.succeed()
             self.get_logger().info(f'Action: succeeded — {done_parsed.raw}')
-
-            # Request a position update so joint states are fresh
-            self._serial.send_command('where')
-
-        else:  # ERR
+            goal_handle.succeed()
+        else:
             result.success  = False
             result.response = done_parsed.raw
-            goal_handle.abort()
             self.get_logger().warn(f'Action: aborted — {done_parsed.raw}')
+            goal_handle.abort()
+
+        # Request a position update after a short delay
+        def _deferred_where():
+            time.sleep(0.05)
+            self._serial.send_command('where')
+        threading.Thread(target=_deferred_where, daemon=True).start()
 
         return result
 
