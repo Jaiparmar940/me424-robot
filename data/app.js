@@ -33,6 +33,27 @@ let stopRequested = false;
 let lastManualPulseDelaySent = null;
 let nextPosResolvers = [];
 
+/** @type {{ expectedTag: string, timer: ReturnType<typeof setTimeout>, resolve: (v: { ok: boolean, line: string }) => void }[]} */
+let fwCompletionWaiters = [];
+
+let liftRoutineRunning = false;
+
+/** Vertical / “go to vertical” pose: C1..C6 tracked counts after homing. */
+const VERTICAL_POSE = [7533, -6027, -3874, 7533, 0, -2847];
+
+/** Tracked pose targets for the one-click lift calibration routine (C1/C4 pair, then C2/C3). */
+const LIFT_ROUTINE = {
+  preHomeS2Steps: 4500,
+  postHomeC2: -6000,
+  postHomeC3: -5000,
+  /** Same array as VERTICAL_POSE; used before bounce block (lift routine also ends there). */
+  preBouncePose: VERTICAL_POSE,
+  /** After `home s2 bounce`, lift Stage 2 to this height (C1=C4) before s3/s4/s1 bounce. */
+  bounceLiftHeightSteps: 4500,
+};
+
+const LIFT_ROUTINE_SYNC_TIMEOUT_MS = 300000;
+
 /** Last-known MOSFET outputs (synced from slave STATUS/ACK, optimistic clicks, localStorage). */
 const MOSFET_LS_KEY = 'me424_mosfet_outputs_v1';
 /** Matches MOSFET slave TOOL_ID: 1=2.2k saw, 2=5k probe, 3=10k vacuum. */
@@ -284,6 +305,8 @@ const els = {
   axisGrid: document.getElementById('axisGrid'),
   zeroAllBtn: document.getElementById('zeroAllBtn'),
   home234Btn: document.getElementById('home234Btn'),
+  liftAutohomeBtn: document.getElementById('liftAutohomeBtn'),
+  goToVerticalBtn: document.getElementById('goToVerticalBtn'),
   recordPoseBtn: document.getElementById('recordPoseBtn'),
   delayMs: document.getElementById('delayMs'),
   addDelayBtn: document.getElementById('addDelayBtn'),
@@ -319,10 +342,11 @@ function updateEStopUI() {
   if (els.estopClearBtn) els.estopClearBtn.disabled = !linkReady || !estopLatchedUI;
 
   const disableMotion = !linkReady || estopLatchedUI;
-  const motionIds = ['home234Btn', 'runSequenceBtn', 'stopSequenceBtn'];
+  const motionIds = ['home234Btn', 'goToVerticalBtn', 'runSequenceBtn', 'stopSequenceBtn'];
   motionIds.forEach((id) => {
     if (els[id]) els[id].disabled = disableMotion;
   });
+  if (els.liftAutohomeBtn) els.liftAutohomeBtn.disabled = disableMotion || liftRoutineRunning;
   document.querySelectorAll('[id^="minus_"], [id^="plus_"], [id^="autohome_"]').forEach((b) => {
     b.disabled = disableMotion;
   });
@@ -353,6 +377,8 @@ function isMotionCommand(cmd) {
   if (/^(c[1-6][fr]\s+\d+)$/.test(c)) return true;
   if (/^home\s+s[1-5]\b/.test(c)) return true;
   if (/^qrun\b/.test(c)) return true;
+  if (/^seq\b/.test(c)) return true;
+  if (/^par\b/.test(c)) return true;
   return false;
 }
 
@@ -362,6 +388,8 @@ function setConnectedUI(connected) {
   els.refreshPosBtn.disabled = !connected;
   els.zeroAllBtn.disabled = !connected;
   els.home234Btn.disabled = !connected;
+  if (els.liftAutohomeBtn) els.liftAutohomeBtn.disabled = !connected || liftRoutineRunning;
+  if (els.goToVerticalBtn) els.goToVerticalBtn.disabled = !connected;
   els.recordPoseBtn.disabled = !connected;
   els.addDelayBtn.disabled = !connected;
   els.addMosfetBtn.disabled = !connected;
@@ -582,12 +610,32 @@ async function readLoop() {
   }
 }
 
+function notifyFwCompletionWaiters(line) {
+  const u = line.trim();
+  for (let i = 0; i < fwCompletionWaiters.length; i++) {
+    const w = fwCompletionWaiters[i];
+    if (u === `DONE ${w.expectedTag}`) {
+      clearTimeout(w.timer);
+      fwCompletionWaiters.splice(i, 1);
+      w.resolve({ ok: true, line: u });
+      return;
+    }
+    if (u.startsWith(`ERR ${w.expectedTag} `)) {
+      clearTimeout(w.timer);
+      fwCompletionWaiters.splice(i, 1);
+      w.resolve({ ok: false, line: u });
+      return;
+    }
+  }
+}
+
 function handleIncoming(line) {
   log(`< ${line}`);
 
   applyMosfetFromIncomingLine(line);
   applySawBldcFromIncomingLine(line);
   syncEStopFromIncomingLine(line);
+  notifyFwCompletionWaiters(line);
 
   // Example: POS C1=0 C2=0 C3=0 C4=0 C5=0 C6=0
   const m = line.match(/^POS\s+C1=(-?\d+)\s+C2=(-?\d+)\s+C3=(-?\d+)\s+C4=(-?\d+)\s+C5=(-?\d+)\s+C6=(-?\d+)$/i);
@@ -621,6 +669,23 @@ async function sendLine(cmd) {
 
 async function requestWhere() {
   await sendLine('where');
+}
+
+function waitForFirmwareCompletion(expectedTag, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      fwCompletionWaiters = fwCompletionWaiters.filter((w) => w !== entry);
+      reject(new Error(`Timeout waiting for firmware (${expectedTag})`));
+    }, timeoutMs);
+    const entry = { expectedTag, timer, resolve };
+    fwCompletionWaiters.push(entry);
+  });
+}
+
+async function refreshPositionFromRobot(timeoutMs = 1500) {
+  await requestWhere();
+  currentPos = await waitForNextPositionUpdate(timeoutMs);
+  updatePosUI();
 }
 
 function waitForNextPositionUpdate(timeoutMs = 1500) {
@@ -692,16 +757,160 @@ async function home234() {
       log('Home 2–4 cancelled by ESTOP/stop request');
       break;
     }
-    await sendLine(cmd);
-    if (shouldAbortAutomation()) break;
-    await requestWhere();
     try {
-      currentPos = await waitForNextPositionUpdate(HOME_CMD_TIMEOUT_MS);
-      updatePosUI();
+      await sendLine(cmd);
+      const r = await waitForFirmwareCompletion(cmd, HOME_CMD_TIMEOUT_MS);
+      if (!r.ok) {
+        log(`Home 2–4: ${r.line}`);
+        break;
+      }
+      await refreshPositionFromRobot(HOME_CMD_TIMEOUT_MS);
     } catch (e) {
       log(`Home 2–4: stopped at "${cmd}" — ${e.message}`);
       break;
     }
+    if (shouldAbortAutomation()) break;
+  }
+}
+
+async function syncAbsAndWait(targetsSix, maxSps, ramp, timeoutMs) {
+  await sendLine(`syncabs ${targetsSix.join(' ')} ${maxSps} ${ramp}`);
+  const r = await waitForFirmwareCompletion('syncabs', timeoutMs);
+  if (!r.ok) throw new Error(r.line);
+  await refreshPositionFromRobot(timeoutMs);
+}
+
+/** Firmware `setpos 0…0` + wait for DONE; sync UI (vertical / “here” becomes origin). */
+async function zeroTrackedAtCurrentPose(timeoutMs = 10000) {
+  await sendLine('setpos 0 0 0 0 0 0');
+  const r = await waitForFirmwareCompletion('setpos', timeoutMs);
+  if (!r.ok) throw new Error(r.line);
+  currentPos = [0, 0, 0, 0, 0, 0];
+  updatePosUI();
+}
+
+async function homeStageAndWait(cmd, timeoutMs) {
+  await sendLine(cmd);
+  const r = await waitForFirmwareCompletion(cmd, timeoutMs);
+  if (!r.ok) throw new Error(r.line);
+  await refreshPositionFromRobot(timeoutMs);
+}
+
+/** `syncabs` to VERTICAL_POSE using Jog Speed / Ramp from the manual section. */
+async function goToVerticalPose() {
+  if (!linkReady) return;
+  const maxSps = Math.max(10, parseInt(els.jogMaxSps.value || '1200', 10));
+  const ramp = Math.max(1, parseInt(els.jogRamp.value || '150', 10));
+  log(`Go to vertical: syncabs [${VERTICAL_POSE.join(', ')}]…`);
+  await syncAbsAndWait([...VERTICAL_POSE], maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+  log('Go to vertical: done.');
+}
+
+/**
+ * One-click lift calibration: pre-position Stage 2, home S1+S3+S4, park S3/S4, re-home S2,
+ * park to preBouncePose, bounce-home S2 → lift 4500 → bounce-home S3, S4, S1 → vertical pose.
+ */
+async function runLiftAutohomeRoutine() {
+  if (!linkReady || liftRoutineRunning) return;
+  if (estopLatchedUI) {
+    alert('Clear ESTOP before running the lift routine.');
+    return;
+  }
+  liftRoutineRunning = true;
+  stopRequested = false;
+  updateEStopUI();
+
+  const maxSps = Math.max(10, parseInt(els.jogMaxSps.value || '1200', 10));
+  const ramp = Math.max(1, parseInt(els.jogRamp.value || '150', 10));
+  const pb = LIFT_ROUTINE.preBouncePose;
+
+  try {
+    log('Lift routine: (1/13) refresh position…');
+    await refreshPositionFromRobot(3000);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(`Lift routine: (2/13) Stage 2 → C1=C4=${LIFT_ROUTINE.preHomeS2Steps} (syncabs)…`);
+    const pre = [...currentPos];
+    pre[0] = LIFT_ROUTINE.preHomeS2Steps;
+    pre[3] = LIFT_ROUTINE.preHomeS2Steps;
+    await syncAbsAndWait(pre, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (3/13) home s1, home s3, home s4 (sequential, all zeros updated)…');
+    for (const h of ['home s1', 'home s3', 'home s4']) {
+      if (shouldAbortAutomation()) throw new Error('Cancelled');
+      await homeStageAndWait(h, HOME_CMD_TIMEOUT_MS);
+    }
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(
+      `Lift routine: (4/13) syncabs C2=${LIFT_ROUTINE.postHomeC2} C3=${LIFT_ROUTINE.postHomeC3} (simultaneous vs new zero)…`,
+    );
+    const park = [...currentPos];
+    park[1] = LIFT_ROUTINE.postHomeC2;
+    park[2] = LIFT_ROUTINE.postHomeC3;
+    await syncAbsAndWait(park, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (5/13) home s2 (re-zero lift)…');
+    await homeStageAndWait('home s2', HOME_CMD_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(`Lift routine: (6/13) syncabs pre-bounce pose [${pb.join(', ')}]…`);
+    await syncAbsAndWait([...pb], maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (7/13) home s2 bounce…');
+    await homeStageAndWait('home s2 bounce', HOME_CMD_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(
+      `Lift routine: (8/13) Stage 2 up → C1=C4=${LIFT_ROUTINE.bounceLiftHeightSteps} (syncabs)…`,
+    );
+    const liftUp = [...currentPos];
+    liftUp[0] = LIFT_ROUTINE.bounceLiftHeightSteps;
+    liftUp[3] = LIFT_ROUTINE.bounceLiftHeightSteps;
+    await syncAbsAndWait(liftUp, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (9/13) home s3 bounce…');
+    await homeStageAndWait('home s3 bounce', HOME_CMD_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (10/13) home s4 bounce…');
+    await homeStageAndWait('home s4 bounce', HOME_CMD_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (11/13) home s1 bounce…');
+    await homeStageAndWait('home s1 bounce', HOME_CMD_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(`Lift routine: (12/13) syncabs vertical [${pb.join(', ')}]…`);
+    await syncAbsAndWait([...VERTICAL_POSE], maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Lift routine: (13/13) set tracked origin at vertical (setpos 0…0)…');
+    await zeroTrackedAtCurrentPose(10000);
+
+    log('Lift routine: complete.');
+  } catch (e) {
+    log(`Lift routine error: ${e.message}`);
+    alert(`Lift autohome routine failed:\n${e.message}`);
+  } finally {
+    liftRoutineRunning = false;
+    updateEStopUI();
   }
 }
 
@@ -833,8 +1042,9 @@ async function goToSequencePose(index) {
 
   try {
     await sendLine(`syncabs ${item.pos.join(' ')} ${maxSps} ${ramp}`);
-    await waitForSyncAbsResult();
-    await requestWhere();
+    const r = await waitForFirmwareCompletion('syncabs', 300000);
+    if (!r.ok) throw new Error(r.line);
+    await refreshPositionFromRobot(300000);
   } catch (e) {
     log(`Go-to-pose error: ${e.message}`);
   }
@@ -885,8 +1095,9 @@ async function runSequence() {
 
       if (item.type === 'pose') {
         await sendLine(`syncabs ${item.pos.join(' ')} ${maxSps} ${ramp}`);
-        await waitForSyncAbsResult();
-        await requestWhere();
+        const r = await waitForFirmwareCompletion('syncabs', 300000);
+        if (!r.ok) throw new Error(r.line);
+        await refreshPositionFromRobot(300000);
       } else if (item.type === 'delay') {
         await sleep(item.ms);
       } else if (item.type === 'mosfet') {
@@ -909,27 +1120,6 @@ function stopSequence() {
   estopLatchedUI = true;
   updateEStopUI();
   sendLine('estop').catch((e) => log(`ESTOP send failed: ${e.message}`));
-}
-
-function waitForSyncAbsResult(timeoutMs = 300000) {
-  return new Promise((resolve, reject) => {
-    const started = Date.now();
-    const startLen = els.logBox.textContent.length;
-
-    const check = () => {
-      if (!running) return resolve();
-      const txt = els.logBox.textContent.slice(startLen);
-      if (txt.includes('SYNCABS: done') || txt.includes('SYNCABS: aborted')) {
-        return resolve();
-      }
-      if (Date.now() - started > timeoutMs) {
-        return reject(new Error('Timed out waiting for SYNCABS completion'));
-      }
-      setTimeout(check, 100);
-    };
-
-    check();
-  });
 }
 
 function saveLocal() {
@@ -989,6 +1179,17 @@ function wireEvents() {
   els.refreshPosBtn.onclick = requestWhere;
   els.zeroAllBtn.onclick = zeroAll;
   els.home234Btn.onclick = home234;
+  if (els.liftAutohomeBtn) els.liftAutohomeBtn.onclick = () => runLiftAutohomeRoutine();
+  if (els.goToVerticalBtn) {
+    els.goToVerticalBtn.onclick = async () => {
+      try {
+        await goToVerticalPose();
+      } catch (e) {
+        log(`Go to vertical: ${e.message}`);
+        alert(`Go to vertical failed:\n${e.message}`);
+      }
+    };
+  }
   els.recordPoseBtn.onclick = recordPose;
   els.addDelayBtn.onclick = addDelay;
   els.addMosfetBtn.onclick = addMosfet;

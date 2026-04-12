@@ -87,8 +87,11 @@
       <div class="row wrap">
         <button id="zeroAllBtn" disabled>Set Current as Zero (All)</button>
         <button id="home234Btn" disabled>Home Stages 2–4 (limits)</button>
+        <button id="liftAutohomeBtn" disabled>Lift autohome (one-click)</button>
+        <button id="goToVerticalBtn" disabled>Go to vertical</button>
       </div>
-      <p class="hint">Use <strong>Auto home</strong> under each axis for firmware homing: <code>home s1</code> soft-zeros the turntable; <code>home s2</code>–<code>home s4</code> seek limits then zero; <code>home s5</code> seeks the Hall zero (sensor GPIO14 / HW-477; <code>limits</code> shows <code>S5H=0</code> at zero) then zeros C5. Stage 5 Hall does not block motion—only used for homing.</p>
+      <p class="hint"><strong>Go to vertical</strong> runs one <code>syncabs</code> to <code>[7533, −6027, −3874, 7533, 0, −2847]</code> (<code>VERTICAL_POSE</code> in the app script). <strong>Lift autohome</strong> ends at vertical after <code>home s1 bounce</code>, then <code>setpos 0…0</code> so that pose is the tracked origin. Uses <strong>Jog Speed</strong> / <strong>Ramp Steps</strong>.</p>
+      <p class="hint">Use <strong>Auto home</strong> under each axis for firmware homing: <code>home s1</code> jogs C6 + to the S1 limit then zeros C6; <code>home s2</code>–<code>home s4</code> seek limits then zero; <code>home s5</code> seeks the Hall zero (sensor GPIO14 / HW-477; <code>limits</code> shows <code>S5H=0</code> at zero) then zeros C5. Stage 5 Hall does not block motion—only used for homing.</p>
     </section>
 
     <section class="card">

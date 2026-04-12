@@ -216,11 +216,12 @@ In `par`, motors with different step counts run until each individually finishes
 | `estop clear` | Clear the e-stop latch to allow motion again |
 | `estop status` | Print `ESTOP=1` or `ESTOP=0` |
 | `limits` | Print last-known limit switch and Stage 5 Hall (`S5H`) states |
-| `home s1` | Soft-zero turntable: set tracked C6 position to 0 at the current pose |
+| `home s1` | Jog turntable (C6) in the + direction (`c6f` / `s1cw`) until the S1 CW limit is active, then set C6 to 0. Uses a **slower** step pulse during the seek than global `speed` (≈2× delay, capped) so the table homes gently. |
 | `home s2` | Drive Stage 2 toward its limit, then zero C1/C4 at the limit |
 | `home s3` | Drive Stage 3 toward its limit, then zero C2 |
 | `home s4` | Drive Stage 4 toward its limit, then zero C3 |
 | `home s5` | Jog Stage 5 until Hall at zero (`S5H=0`), then zero C5 |
+| `home s1 bounce` … `home s4 bounce` | Same as `home sN` but: fast approach, back off 260 steps, slow final creep, then zero. **S1 (turntable)** uses **slower** fast/slow pulse scaling than S2–S4 (see firmware `homeS1Bounce*PulseUs`). Stage 5 has no bounce variant. |
 | `help` | Print command menu |
 
 ---

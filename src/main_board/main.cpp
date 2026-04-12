@@ -975,18 +975,147 @@ void applyPositionState(long p[NUM_DRIVERS]) {
 
 static const int HOME_CHUNK_STEPS = 40;
 static const long HOME_MAX_SEEK_STEPS = 250000L;
+// Bounce homing (`home sN bounce`): fast approach, back off, slow final creep, then zero.
+static const int HOME_BOUNCE_BACKOFF_STEPS = 260;
+static const int HOME_BOUNCE_SLOW_CHUNK = 8;
+
+static int homeBounceSlowPulseUs(int saved) {
+  return min(max(saved * 5, saved + 800), 14000);
+}
+
+// Turntable (S1) homing uses gentler pulse timing than other axes.
+static int homeS1StraightHomingPulseUs(int saved) {
+  return min(max(saved * 2, saved + 900), 12000);
+}
+static int homeS1BounceFastPulseUs(int saved) {
+  return max(400, (saved * 3) / 4);
+}
+static int homeS1BounceSlowPulseUs(int saved) {
+  return min(max(saved * 6, saved + 1500), 20000);
+}
 // Stage 5 Hall seek: slower pulse + smaller chunks (does not change global `speed` / manual jog).
 static const int HOME_S5_CHUNK_STEPS = 24;
 static const int HOME_S5_PULSE_DELAY_US = 2400;
 
-bool homeStage1SoftZero() {
+// Seek toward limit only (no zero). Caller sets `pulseDelayUs`; restored by bounce callers.
+static bool homeStage1SeekCWNoZero(int chunkSteps) {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage1CWLimitHit) return true;
+    long chunk = chunkSteps;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
+    if (chunk <= 0) break;
+    if (!stepMotor(STAGE1, true, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage1CWLimitHit) return true;
+      return false;
+    }
+    moved += chunk;
+  }
+  return stage1CWLimitHit;
+}
+
+static bool homeStage2SeekDownNoZero(int chunkSteps) {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage2LimitHit) return true;
+    long chunk = chunkSteps;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
+    if (chunk <= 0) break;
+    if (!stepStage2(false, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage2LimitHit) return true;
+      return false;
+    }
+    moved += chunk;
+  }
+  return stage2LimitHit;
+}
+
+static bool homeStage3SeekDownNoZero(int chunkSteps) {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage3LimitHit) return true;
+    long chunk = chunkSteps;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
+    if (chunk <= 0) break;
+    if (!stepMotor(STAGE3, true, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage3LimitHit) return true;
+      return false;
+    }
+    moved += chunk;
+  }
+  return stage3LimitHit;
+}
+
+static bool homeStage4SeekDownNoZero(int chunkSteps) {
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) return false;
+    if (stage4LimitHit) return true;
+    long chunk = chunkSteps;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
+    if (chunk <= 0) break;
+    if (!stepMotor(STAGE4, true, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage4LimitHit) return true;
+      return false;
+    }
+    moved += chunk;
+  }
+  return stage4LimitHit;
+}
+
+bool homeStage1ToLimit() {
   if (estopLatched) return false;
+  const int savedPulse = pulseDelayUs;
+  pulseDelayUs = homeS1StraightHomingPulseUs(savedPulse);
+  long moved = 0;
+  while (moved < HOME_MAX_SEEK_STEPS) {
+    pollEmergencyInputs();
+    serviceSensorUART();
+    if (estopLatched) {
+      pulseDelayUs = savedPulse;
+      return false;
+    }
+    if (stage1CWLimitHit) break;
+    long chunk = HOME_CHUNK_STEPS;
+    if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
+    if (chunk <= 0) break;
+    if (!stepMotor(STAGE1, true, (int)chunk)) {
+      serviceSensorUART();
+      if (stage1CWLimitHit) break;
+      pulseDelayUs = savedPulse;
+      return false;
+    }
+    moved += chunk;
+  }
+  pulseDelayUs = savedPulse;
+  if (!stage1CWLimitHit) {
+    printlnDebug("HOME S1: CW limit not reached (check sensor LIM S1=1, wiring, debounce)");
+    return false;
+  }
   long p[NUM_DRIVERS];
   for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
   p[STAGE1] = 0;
   applyPositionState(p);
-  printlnBoth("HOME S1: soft zero only (C6=0 here; no turntable motion). "
-              "If CW jog is blocked, check LIMITS S1= / sensor S1 debounce.");
+  printlnDebug("HOME S1: zero at CW limit (same + direction as c6f / s1cw)");
   return true;
 }
 
@@ -1000,7 +1129,12 @@ bool homeStage2ToLimit() {
     long chunk = HOME_CHUNK_STEPS;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
     if (chunk <= 0) break;
-    if (!stepStage2(false, (int)chunk)) return false;
+    if (!stepStage2(false, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage2LimitHit) break;
+      return false;
+    }
     moved += chunk;
   }
   if (!stage2LimitHit) {
@@ -1026,7 +1160,12 @@ bool homeStage3ToLimit() {
     long chunk = HOME_CHUNK_STEPS;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
     if (chunk <= 0) break;
-    if (!stepMotor(STAGE3, true, (int)chunk)) return false;
+    if (!stepMotor(STAGE3, true, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage3LimitHit) break;
+      return false;
+    }
     moved += chunk;
   }
   if (!stage3LimitHit) {
@@ -1051,7 +1190,12 @@ bool homeStage4ToLimit() {
     long chunk = HOME_CHUNK_STEPS;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
     if (chunk <= 0) break;
-    if (!stepMotor(STAGE4, true, (int)chunk)) return false;
+    if (!stepMotor(STAGE4, true, (int)chunk)) {
+      if (estopLatched) return false;
+      serviceSensorUART();
+      if (stage4LimitHit) break;
+      return false;
+    }
     moved += chunk;
   }
   if (!stage4LimitHit) {
@@ -1063,6 +1207,127 @@ bool homeStage4ToLimit() {
   p[STAGE4] = 0;
   applyPositionState(p);
   printlnDebug("HOME S4: zero at limit");
+  return true;
+}
+
+bool homeStage1ToLimitBounce() {
+  if (estopLatched) return false;
+  const int saved = pulseDelayUs;
+  pulseDelayUs = homeS1BounceFastPulseUs(saved);
+  if (!homeStage1SeekCWNoZero(HOME_CHUNK_STEPS)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (estopLatched) return false;
+  if (!stepMotor(STAGE1, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  serviceSensorUART();
+  pulseDelayUs = homeS1BounceSlowPulseUs(saved);
+  if (!homeStage1SeekCWNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (!stage1CWLimitHit) {
+    printlnDebug("HOME S1 bounce: CW limit not confirmed");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE1] = 0;
+  applyPositionState(p);
+  printlnDebug("HOME S1: zero at CW limit (bounce)");
+  return true;
+}
+
+bool homeStage2ToLimitBounce() {
+  if (estopLatched) return false;
+  const int saved = pulseDelayUs;
+  pulseDelayUs = max(100, saved / 2);
+  if (!homeStage2SeekDownNoZero(HOME_CHUNK_STEPS)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (estopLatched) return false;
+  if (!stepStage2(true, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  serviceSensorUART();
+  pulseDelayUs = homeBounceSlowPulseUs(saved);
+  if (!homeStage2SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (!stage2LimitHit) {
+    printlnDebug("HOME S2 bounce: limit not confirmed");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE2_RIGHT] = 0;
+  p[STAGE2_LEFT] = 0;
+  applyPositionState(p);
+  printlnDebug("HOME S2: zero at limit (bounce)");
+  return true;
+}
+
+bool homeStage3ToLimitBounce() {
+  if (estopLatched) return false;
+  const int saved = pulseDelayUs;
+  pulseDelayUs = max(100, saved / 2);
+  if (!homeStage3SeekDownNoZero(HOME_CHUNK_STEPS)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (estopLatched) return false;
+  if (!stepMotor(STAGE3, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  serviceSensorUART();
+  pulseDelayUs = homeBounceSlowPulseUs(saved);
+  if (!homeStage3SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (!stage3LimitHit) {
+    printlnDebug("HOME S3 bounce: limit not confirmed");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE3] = 0;
+  applyPositionState(p);
+  printlnDebug("HOME S3: zero at limit (bounce)");
+  return true;
+}
+
+bool homeStage4ToLimitBounce() {
+  if (estopLatched) return false;
+  const int saved = pulseDelayUs;
+  pulseDelayUs = max(100, saved / 2);
+  if (!homeStage4SeekDownNoZero(HOME_CHUNK_STEPS)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (estopLatched) return false;
+  if (!stepMotor(STAGE4, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  serviceSensorUART();
+  pulseDelayUs = homeBounceSlowPulseUs(saved);
+  if (!homeStage4SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
+    pulseDelayUs = saved;
+    return false;
+  }
+  pulseDelayUs = saved;
+  if (!stage4LimitHit) {
+    printlnDebug("HOME S4 bounce: limit not confirmed");
+    return false;
+  }
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE4] = 0;
+  applyPositionState(p);
+  printlnDebug("HOME S4: zero at limit (bounce)");
   return true;
 }
 
@@ -1167,8 +1432,9 @@ void printHelp() {
   printlnBoth("  speed 800     -> set pulse delay in microseconds");
   printlnBoth("  where         -> print current tracked positions");
   printlnBoth("  setpos p1 p2 p3 p4 p5 p6 -> overwrite tracked positions");
-  printlnBoth("  home s1       -> soft zero turntable (C6=0 here)");
+  printlnBoth("  home s1       -> jog C6 + (c6f/s1cw) to S1 limit, then C6=0");
   printlnBoth("  home s2..s4   -> drive to limit switches, then zero those axes");
+  printlnBoth("  home sN bounce -> s1-s4 only: fast seek, back off, slow creep, then zero");
   printlnBoth("  home s5       -> find Hall zero (S5H), then zero C5");
   printlnBoth("  estop         -> latch emergency stop (blocks all motion)");
   printlnBoth("  estop clear   -> clear e-stop latch");
@@ -1265,13 +1531,31 @@ void handleCommand(String cmd) {
   if (cmd.startsWith("home ")) {
     String h = cmd.substring(5);
     h.trim();
+    bool bounce = false;
+    if (h.endsWith(" bounce")) {
+      bounce = true;
+      h = h.substring(0, h.length() - 7);
+      h.trim();
+    }
     bool ok = false;
-    if      (h == "s1") ok = homeStage1SoftZero();
-    else if (h == "s2") ok = homeStage2ToLimit();
-    else if (h == "s3") ok = homeStage3ToLimit();
-    else if (h == "s4") ok = homeStage4ToLimit();
-    else if (h == "s5") ok = homeStage5ToHall();
-    else { sendERR(cmd, "unknown stage"); return; }
+    if (h == "s1") {
+      ok = bounce ? homeStage1ToLimitBounce() : homeStage1ToLimit();
+    } else if (h == "s2") {
+      ok = bounce ? homeStage2ToLimitBounce() : homeStage2ToLimit();
+    } else if (h == "s3") {
+      ok = bounce ? homeStage3ToLimitBounce() : homeStage3ToLimit();
+    } else if (h == "s4") {
+      ok = bounce ? homeStage4ToLimitBounce() : homeStage4ToLimit();
+    } else if (h == "s5") {
+      if (bounce) {
+        sendERR(cmd, "s5 bounce not supported (use home s5)");
+        return;
+      }
+      ok = homeStage5ToHall();
+    } else {
+      sendERR(cmd, "unknown stage");
+      return;
+    }
     ok ? sendDONE(cmd) : sendERR(cmd, "aborted");
     return;
   }
