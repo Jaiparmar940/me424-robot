@@ -178,6 +178,8 @@ Commands are separated by `,`. Whitespace around commas is ignored.
 | `seq <cmd1>, <cmd2>, ...` | Execute commands one at a time in order. Any command type is valid (motor, MOSFET, utility). |
 | `par <cmd1>, <cmd2>, ...` | Execute motor commands simultaneously. All specified motors are stepped on the same clock tick. Motor/stage commands only — MOSFET commands are not supported in `par`. |
 | `syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps` | Execute a synchronized **absolute** 6-axis move. Each axis reaches its target at the same time, speed is capped by `maxSps` (steps/s), and accel/decel ramping is applied using `rampSteps`. |
+| `vertical [maxSps] [ramp]` | Same as the web **Go to vertical** button: `syncabs` to the stored vertical pose (defaults **1200** / **150**). Targets live in firmware as `kAppVerticalPose` — keep in sync with `VERTICAL_POSE` in `app.js`. |
+| `autohome [maxSps] [ramp]` | Same as the web **Lift autohome** button: full lift calibration, ending at vertical then `setpos` all zeros. Optional `maxSps` / `ramp` override defaults **1200** / **150**. Constants match `LIFT_ROUTINE` in `app.js`. |
 | `qclear` | Clear onboard queue |
 | `qadd pose t1 t2 t3 t4 t5 t6 maxSps rampSteps` | Append a synchronized absolute move segment to onboard queue |
 | `qadd delay ms` | Append delay segment to onboard queue |

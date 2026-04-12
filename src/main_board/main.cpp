@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <cstring>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 #include <FS.h>
@@ -1381,6 +1382,81 @@ bool homeStage5ToHall() {
   return false;
 }
 
+// --- App parity: VERTICAL_POSE / LIFT_ROUTINE in app.js (keep numbers in sync). ---
+static const long kAppVerticalPose[NUM_DRIVERS] =
+    {7533L, -6027L, -3874L, 7533L, 0L, -2847L};
+static const long kLiftRoutinePreS2 = 4500L;
+static const long kLiftRoutinePostC2 = -6000L;
+static const long kLiftRoutinePostC3 = -5000L;
+static const long kLiftRoutineBounceLift = 4500L;
+static const long kMacroDefaultMaxSps = 1200L;
+static const int kMacroDefaultRamp = 150;
+
+static void parseMacroMaxSpsRamp(const String &cmd, const char *keyword,
+                                 long &maxSps, int &rampSteps) {
+  maxSps = kMacroDefaultMaxSps;
+  rampSteps = kMacroDefaultRamp;
+  const int kwLen = (int)strlen(keyword);
+  if ((int)cmd.length() <= kwLen) return;
+  if (!cmd.startsWith(keyword)) return;
+  String tail = cmd.substring(kwLen);
+  tail.trim();
+  if (tail.length() == 0) return;
+  long m = 0;
+  int r = 0;
+  int got = sscanf(tail.c_str(), "%ld %d", &m, &r);
+  if (got >= 1 && m >= 10) maxSps = m;
+  if (got >= 2 && r >= 1) rampSteps = r;
+}
+
+static bool runVerticalMacro(long maxSps, int rampSteps) {
+  long t[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i];
+  return runSyncAbs(t, maxSps, rampSteps);
+}
+
+static bool runLiftAutohomeMacro(long maxSps, int rampSteps) {
+  if (estopLatched) return false;
+  long t[NUM_DRIVERS];
+
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = currentPos[i];
+  t[STAGE2_RIGHT] = kLiftRoutinePreS2;
+  t[STAGE2_LEFT] = kLiftRoutinePreS2;
+  if (!runSyncAbs(t, maxSps, rampSteps)) return false;
+
+  if (!homeStage1ToLimit()) return false;
+  if (!homeStage3ToLimit()) return false;
+  if (!homeStage4ToLimit()) return false;
+
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = currentPos[i];
+  t[STAGE3] = kLiftRoutinePostC2;
+  t[STAGE4] = kLiftRoutinePostC3;
+  if (!runSyncAbs(t, maxSps, rampSteps)) return false;
+
+  if (!homeStage2ToLimit()) return false;
+
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i];
+  if (!runSyncAbs(t, maxSps, rampSteps)) return false;
+
+  if (!homeStage2ToLimitBounce()) return false;
+
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = currentPos[i];
+  t[STAGE2_RIGHT] = kLiftRoutineBounceLift;
+  t[STAGE2_LEFT] = kLiftRoutineBounceLift;
+  if (!runSyncAbs(t, maxSps, rampSteps)) return false;
+
+  if (!homeStage3ToLimitBounce()) return false;
+  if (!homeStage4ToLimitBounce()) return false;
+  if (!homeStage1ToLimitBounce()) return false;
+
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i];
+  if (!runSyncAbs(t, maxSps, rampSteps)) return false;
+
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = 0;
+  applyPositionState(t);
+  return true;
+}
+
 void printHelp() {
   printlnBoth("");
   printlnBoth("Stage commands:");
@@ -1417,6 +1493,8 @@ void printHelp() {
   printlnBoth("  (par supports motor/stage commands only)");
   printlnBoth("  syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps");
   printlnBoth("     -> synchronized absolute move with accel/decel ramp");
+  printlnBoth("  vertical [maxSps] [ramp]  -> same as app Go to vertical (default 1200 150)");
+  printlnBoth("  autohome [maxSps] [ramp]  -> same as app Lift autohome (default 1200 150)");
   printlnBoth("  qclear");
   printlnBoth("  qadd pose t1 t2 t3 t4 t5 t6 maxSps rampSteps");
   printlnBoth("  qadd delay ms");
@@ -1674,6 +1752,24 @@ void handleCommand(String cmd) {
     } else {
       sendERR("syncabs", "bad args");
     }
+    return;
+  }
+
+  if (cmd == "vertical" || cmd.startsWith("vertical ")) {
+    long maxSps;
+    int rampSteps;
+    parseMacroMaxSpsRamp(cmd, "vertical", maxSps, rampSteps);
+    bool ok = runVerticalMacro(maxSps, rampSteps);
+    ok ? sendDONE("vertical") : sendERR("vertical", "aborted");
+    return;
+  }
+
+  if (cmd == "autohome" || cmd.startsWith("autohome ")) {
+    long maxSps;
+    int rampSteps;
+    parseMacroMaxSpsRamp(cmd, "autohome", maxSps, rampSteps);
+    bool ok = runLiftAutohomeMacro(maxSps, rampSteps);
+    ok ? sendDONE("autohome") : sendERR("autohome", "aborted");
     return;
   }
 

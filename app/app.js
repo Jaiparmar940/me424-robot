@@ -43,6 +43,7 @@ const VERTICAL_POSE = [7533, -6027, -3874, 7533, 0, -2847];
 
 /** Tracked pose targets for the one-click lift calibration routine (C1/C4 pair, then C2/C3). */
 const LIFT_ROUTINE = {
+  // Keep in sync with firmware `kAppVerticalPose` / `kLiftRoutine*` in `src/main_board/main.cpp`.
   preHomeS2Steps: 4500,
   postHomeC2: -6000,
   postHomeC3: -5000,
@@ -379,6 +380,8 @@ function isMotionCommand(cmd) {
   if (/^qrun\b/.test(c)) return true;
   if (/^seq\b/.test(c)) return true;
   if (/^par\b/.test(c)) return true;
+  if (/^vertical\b/.test(c)) return true;
+  if (/^autohome\b/.test(c)) return true;
   return false;
 }
 
