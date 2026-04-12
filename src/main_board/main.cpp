@@ -1384,7 +1384,7 @@ bool homeStage5ToHall() {
 
 // --- App parity: VERTICAL_POSE / LIFT_ROUTINE in app.js (keep numbers in sync). ---
 static const long kAppVerticalPose[NUM_DRIVERS] =
-    {7533L, -6027L, -3874L, 7533L, 0L, -2847L};
+    {7833L, -5827L, -3972L, 7833L, 0L, -2967L};
 static const long kLiftRoutinePreS2 = 4500L;
 static const long kLiftRoutinePostC2 = -6000L;
 static const long kLiftRoutinePostC3 = -5000L;

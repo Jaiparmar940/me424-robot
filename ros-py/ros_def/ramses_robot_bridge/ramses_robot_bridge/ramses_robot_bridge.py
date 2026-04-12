@@ -193,7 +193,7 @@ class Esp32BridgeNode(Node):
         self.get_logger().info(f'  Serial : {port} @ {baudrate}')
         self.get_logger().info('  Action : /arm/move')
         self.get_logger().info('  Sub    : /arm/command')
-        self.get_logger().info('  Pub    : /arm/joint_states  /arm/response  '
+        self.get_logger().info('  Pub    : /joint_states  /arm/response  '
                                '/arm/estop_state  /arm/limits')
 
     # ==============================================================
@@ -295,7 +295,8 @@ class Esp32BridgeNode(Node):
         #   joint_arm1      -> C2 (index 1)
         #   joint_arm2      -> C3 (index 2)
         #   joint_wrist     -> C5 (index 4)
-        controller_for_joint = [5, 0, 1, 2, 4]
+        # controller_for_joint = [5, 0, 1, 2, 4]
+        controller_for_joint = [4, 2, 1, 0, 5]
 
         msg.position = [
             steps[c] * RAD_PER_STEP[c]

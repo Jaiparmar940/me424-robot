@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'ik_solver       = ramses_ik.ik_solver:main',
             'teleop_keyboard = ramses_ik.teleop_keyboard:main',
+            'calibrate       = ramses_ik.calibrate:main',
         ],
     },
 )

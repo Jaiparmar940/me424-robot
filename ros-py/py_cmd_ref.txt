@@ -25,6 +25,16 @@ colcon build --packages-select ramses_robot_interfaces ramses_robot_bridge ramse
 source install/setup.bash
 ros2 launch ramses_robot_description display.launch.py
 
+cd ~/ros2_ws
+colcon build --packages-select ramses_robot_interfaces ramses_robot_bridge ramses_robot_description ramses_ik
+source install/setup.bash
+ros2 launch ramses_robot_description display.launch.py
+
+
+source ~/ros2_ws/install/setup.bash
+ros2 action send_goal /arm/move ramses_robot_interfaces/action/ArmMove "command: 'autohome'"
+ros2 run ramses_ik calibrate
+
 
 flashing the esp:
 cd ~/robot_firmware

@@ -61,12 +61,19 @@ RAD_PER_STEP = [_rad_per_step(i) for i in range(6)]
 # ------------------------------------------------------------------
 # Order matches the controller-to-joint mapping used in
 # _publish_joint_states (controller_for_joint list).
+# JOINT_NAMES = [
+#     's1_turntable',   # C6 / S1  — turntable
+#     's2_shoulder',    # C1 / S2  — base lift (paired C1+C4, use C1)
+#     's3_elbow',       # C2 / S3  — arm segment 1
+#     's4_wrist',       # C3 / S4  — arm segment 2
+#     's5_wrist_twist', # C5 / S5  — wrist twist
+# ]
 JOINT_NAMES = [
-    's1_turntable',   # C6 / S1  — turntable
-    's2_shoulder',    # C1 / S2  — base lift (paired C1+C4, use C1)
-    's3_elbow',       # C2 / S3  — arm segment 1
-    's4_wrist',       # C3 / S4  — arm segment 2
-    's5_wrist_twist', # C5 / S5  — wrist twist
+    's5_wrist_twist',
+    's4_wrist',
+    's3_elbow',
+    's2_shoulder',
+    's1_turntable',
 ]
 
 # ------------------------------------------------------------------

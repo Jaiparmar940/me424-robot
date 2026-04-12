@@ -42,7 +42,7 @@ from std_msgs.msg import Float64MultiArray, String
 
 from ramses_robot_interfaces.action import ArmMove
 
-from .arm_model import ArmModel, angles_to_syncabs
+from .arm_model import ArmModel, angles_to_syncabs, firmware_pos_to_urdf_angles
 
 
 class IKSolverNode(Node):

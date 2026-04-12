@@ -78,23 +78,49 @@ JOINT_LIMITS_RAD = {
     for k, (lo, hi) in JOINT_LIMITS.items()
 }
 
-# Steps per full output revolution (16x microstepping)
+# Steps per full output revolution (8x microstepping)
 MICROSTEPS_PER_REV = {
-    'S1': 8320,
-    'S2': 28800,
-    'S3': 19200,
-    'S4': 16800,
-    'S5':  1600,
+    'S1':  8320,   # S1 turntable   (1040 full steps × 8)
+    'S2': 28800,   # S2 shoulder    (3600 full steps × 8)
+    'S3': 19200,   # S3 elbow       (2400 full steps × 8)
+    'S4': 16800,   # S4 wrist       (2100 full steps × 8)
+    'S5':  1600,   # S5 wrist twist ( 200 full steps × 8)
 }
 
-# Mapping from joint name to controller index (0-based, matches firmware C1-C6)
-# C1/C4 = S2 (paired), C2 = S3, C3 = S4, C5 = S5, C6 = S1
-JOINT_TO_CONTROLLER = {
-    'S1': 5,   # C6
-    'S2': 0,   # C1 (C4 mirrors automatically in firmware)
-    'S3': 1,   # C2
-    'S4': 2,   # C3
-    'S5': 4,   # C5
+# ---------------------------------------------------------------------------
+# Firmware zero = autohome position = your defined physical zero
+# ---------------------------------------------------------------------------
+# After autohome, all step counts = 0 at the defined zero positions:
+#   S1: arm pointing towards docking station (+X)
+#   S2: arm straight up
+#   S3: arm straight up
+#   S4: arm straight up
+#   S5: default wrist orientation
+#
+# So the conversion is simply:
+#   physical_angle = steps × rad_per_step
+#   steps = physical_angle / rad_per_step
+#
+# AXIS_SIGN: +1 if positive steps = positive angle, -1 if inverted.
+# Verify on physical arm after autohome by jogging each axis.
+AXIS_SIGN = {
+    'S1': +1,
+    'S2': +1,
+    'S3': +1,
+    'S4': +1,
+    'S5': +1,
+}
+
+# URDF/ikpy frame vs physical frame offset.
+# ikpy's zero for each joint (from Onshape) may differ from your physical zero.
+# Run: ros2 run ramses_ik calibrate  to determine these values.
+# urdf_angle = physical_angle + JOINT_ZERO_OFFSETS[joint]
+JOINT_ZERO_OFFSETS = {
+    'S1': 0.0,
+    'S2': 0.0,
+    'S3': 0.0,
+    'S4': 0.0,
+    'S5': 0.0,
 }
 
 
@@ -102,53 +128,132 @@ JOINT_TO_CONTROLLER = {
 # Angle ↔ step conversion
 # ---------------------------------------------------------------------------
 
-def radians_to_steps(joint: str, angle_rad: float) -> int:
-    """Convert a joint angle in radians to absolute step count from zero."""
-    steps_per_rev = MICROSTEPS_PER_REV[joint]
-    return round(angle_rad * steps_per_rev / (2.0 * math.pi))
+def steps_to_physical(joint: str, steps: int) -> float:
+    """Convert firmware step count to physical angle (radians from autohome zero)."""
+    rad_per_step = (2.0 * math.pi) / MICROSTEPS_PER_REV[joint]
+    return AXIS_SIGN[joint] * steps * rad_per_step
+
+
+def physical_to_steps(joint: str, physical_rad: float) -> int:
+    """Convert physical angle (radians) to firmware step count. Clamps to joint limits."""
+    lo, hi = JOINT_LIMITS_RAD[joint]
+    clamped = max(lo, min(hi, physical_rad))
+    rad_per_step = (2.0 * math.pi) / MICROSTEPS_PER_REV[joint]
+    return round(AXIS_SIGN[joint] * clamped / rad_per_step)
+
+
+def physical_to_urdf(joint: str, physical_rad: float) -> float:
+    """Convert physical angle to URDF/ikpy frame."""
+    return physical_rad + JOINT_ZERO_OFFSETS[joint]
+
+
+def urdf_to_physical(joint: str, urdf_rad: float) -> float:
+    """Convert URDF/ikpy angle to physical angle."""
+    return urdf_rad - JOINT_ZERO_OFFSETS[joint]
+
+
+def radians_to_steps(joint: str, physical_rad: float) -> int:
+    """Alias for physical_to_steps."""
+    return physical_to_steps(joint, physical_rad)
 
 
 def steps_to_radians(joint: str, steps: int) -> float:
-    """Convert an absolute step count to radians."""
-    steps_per_rev = MICROSTEPS_PER_REV[joint]
-    return steps * (2.0 * math.pi) / steps_per_rev
+    """Alias for steps_to_physical."""
+    return steps_to_physical(joint, steps)
 
 
 def joint_angles_to_steps(angles: dict) -> dict:
-    """
-    Convert a dict of {joint_name: angle_rad} to {joint_name: steps}.
-    Clamps to joint limits before converting.
-    """
-    result = {}
-    for joint, angle in angles.items():
-        lo, hi = JOINT_LIMITS_RAD[joint]
-        clamped = max(lo, min(hi, angle))
-        result[joint] = radians_to_steps(joint, clamped)
-    return result
+    """Convert {joint: urdf_angle_rad} to {joint: firmware_steps}."""
+    return {
+        joint: physical_to_steps(joint, urdf_to_physical(joint, urdf_rad))
+        for joint, urdf_rad in angles.items()
+    }
 
 
-def angles_to_syncabs(angles: dict) -> str:
-    """
-    Convert joint angles (radians) to a syncabs firmware command string.
-    Returns e.g. "syncabs 0 400 -200 100 0 0 800 40"
+def steps_to_urdf_angles(steps_dict: dict) -> dict:
+    """Convert {joint: firmware_steps} to {joint: urdf_angle_rad}."""
+    return {
+        joint: physical_to_urdf(joint, steps_to_physical(joint, steps))
+        for joint, steps in steps_dict.items()
+    }
 
-    Controller order for syncabs: t1=C1 t2=C2 t3=C3 t4=C4 t5=C5 t6=C6
-    C1=S2R, C2=S3, C3=S4, C4=S2L(mirror), C5=S5, C6=S1
+
+def angles_to_syncabs(angles: dict, max_sps: int = 800, ramp: int = 40) -> str:
+    """
+    Convert IK solution angles (URDF frame, radians) to a syncabs command.
+    Applies zero offsets so the firmware gets physical step counts.
+
+    syncabs controller order: t1=C1(S2R) t2=C2(S3) t3=C3(S4) t4=C4(S2L) t5=C5(S5) t6=C6(S1)
     """
     steps = joint_angles_to_steps(angles)
-
     s1 = steps.get('S1', 0)
     s2 = steps.get('S2', 0)
     s3 = steps.get('S3', 0)
     s4 = steps.get('S4', 0)
     s5 = steps.get('S5', 0)
+    return f"syncabs {s2} {s3} {s4} {s2} {s5} {s1} {max_sps} {ramp}"
 
-    # syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps
-    # t1=C1(S2R) t2=C2(S3) t3=C3(S4) t4=C4(S2L=S2R) t5=C5(S5) t6=C6(S1)
-    max_sps   = 800
-    ramp_steps = 40
 
-    return f"syncabs {s2} {s3} {s4} {s2} {s5} {s1} {max_sps} {ramp_steps}"
+def firmware_pos_to_urdf_angles(pos_line: str) -> dict:
+    """
+    Parse a firmware POS line and return URDF-frame joint angles.
+    Input:  'POS C1=10200 C2=0 C3=0 C4=10200 C5=0 C6=0'
+    Output: {'S1': rad, 'S2': rad, 'S3': rad, 'S4': rad, 'S5': rad}
+
+    Controller → stage mapping:
+      C1 = S2 (right),  C2 = S3,  C3 = S4,  C4 = S2 (left, mirror)
+      C5 = S5,          C6 = S1
+    """
+    import re
+    values = {}
+    for match in re.finditer(r'C(\d+)=(-?\d+)', pos_line):
+        c = int(match.group(1))
+        steps = int(match.group(2))
+        if c == 1:
+            values['S2'] = steps
+        elif c == 2:
+            values['S3'] = steps
+        elif c == 3:
+            values['S4'] = steps
+        elif c == 5:
+            values['S5'] = steps
+        elif c == 6:
+            values['S1'] = steps
+        # C4 mirrors C1, ignored
+
+    return steps_to_urdf_angles(values)
+
+
+# ---------------------------------------------------------------------------
+# Calibration helper
+# ---------------------------------------------------------------------------
+
+def print_calibration_report(arm: 'ArmModel') -> None:
+    """
+    Print FK output at all-zero joint angles (URDF frame).
+    Use this to determine JOINT_ZERO_OFFSETS:
+      Home the arm physically, then run this — the FK output tells you
+      where ikpy thinks the end effector is at firmware zero.
+      Adjust JOINT_ZERO_OFFSETS until FK output matches physical reality.
+    """
+    print('\n=== Calibration report ===')
+    print('FK at all joints = 0 (URDF frame, before any offsets):')
+    zeros = {j: 0.0 for j in ['S1', 'S2', 'S3', 'S4', 'S5']}
+    fk = arm.forward_kinematics(zeros)
+    x, y, z = fk[0, 3], fk[1, 3], fk[2, 3]
+    print(f'  End effector: x={x:.4f}  y={y:.4f}  z={z:.4f} (metres)')
+    print()
+    print('Current JOINT_ZERO_OFFSETS:')
+    for j, v in JOINT_ZERO_OFFSETS.items():
+        print(f'  {j}: {v:.4f} rad  ({math.degrees(v):.2f}°)')
+    print()
+    print('To calibrate:')
+    print('  1. Home all axes on the physical robot')
+    print('  2. Measure actual end-effector position')
+    print('  3. Adjust JOINT_ZERO_OFFSETS in arm_model.py until')
+    print('     FK output matches your measurement')
+    print('  4. Rebuild: colcon build --packages-select ramses_ik')
+    print('=====================================\n')
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +288,7 @@ class ArmModel:
 
         self._chain = ikpy.chain.Chain.from_urdf_file(
             urdf_path,
+            base_elements=['b_turntablebase_001'],
             active_links_mask=self._build_active_mask(urdf_path),
         )
         self._urdf_path = urdf_path

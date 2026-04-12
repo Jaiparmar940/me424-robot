@@ -57,7 +57,10 @@ def generate_launch_description() -> LaunchDescription:
         executable='joint_state_publisher',
         name='joint_state_publisher',
         output='screen',
-        parameters=[{'source_list': ['/joint_states']}],
+        parameters=[{
+            'robot_description': robot_description,
+            'source_list': ['/joint_states'],
+        }],
     )
 
     # Serial bridge — publishes /joint_states
@@ -85,7 +88,6 @@ def generate_launch_description() -> LaunchDescription:
         port_arg,
         baudrate_arg,
         robot_state_publisher,
-        joint_state_publisher,
         bridge_node,
         rviz_node,
     ])
