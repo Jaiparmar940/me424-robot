@@ -24,6 +24,29 @@ WiFiClient commandClient;
 WebServer httpServer(80);
 WebSocketsServer webSocket(81);
 bool webSocketLive = false;
+
+// Never call broadcastTXT from inside webSocketEvent (e.g. during handleCommand) — it drops clients.
+// Queue lines here; wsTxFlush() runs after webSocket.loop().
+// printHelp() alone is ~70 lines; keep headroom so WebSocket clients see the full list (e.g. "ip" under Other:).
+#define WS_TX_QUEUE_DEPTH 160
+static String wsTxQueue[WS_TX_QUEUE_DEPTH];
+static uint8_t wsTxQueueLen = 0;
+
+static void wsTxEnqueue(const String &line) {
+  if (wsTxQueueLen >= WS_TX_QUEUE_DEPTH) {
+    Serial.println(F("WS TX queue overflow (line dropped)"));
+    return;
+  }
+  wsTxQueue[wsTxQueueLen++] = line;
+}
+
+static void wsTxFlush() {
+  if (!webSocketLive || wsTxQueueLen == 0) return;
+  for (uint8_t i = 0; i < wsTxQueueLen; i++) {
+    webSocket.broadcastTXT(wsTxQueue[i]);
+  }
+  wsTxQueueLen = 0;
+}
 bool httpServerLive = false;
 
 bool DEBUG = false;
@@ -115,6 +138,7 @@ const long SENSOR_BAUD = 115200;
 // Limit states from sensor board
 // true = switch hit
 // =========================
+volatile bool stage1CWLimitHit = false;
 volatile bool stage2LimitHit = false;
 volatile bool stage3LimitHit = false;
 volatile bool stage4LimitHit = false;
@@ -197,8 +221,7 @@ void printBoth(const String &msg) {
   if (DEBUG) Serial.print(msg);
   if (commandClient && commandClient.connected()) commandClient.print(msg);
   if (webSocketLive) {
-    String wscopy = msg;
-    webSocket.broadcastTXT(wscopy);
+    wsTxEnqueue(msg);
   }
 }
 
@@ -206,8 +229,7 @@ void printlnBoth(const String &msg) {
   if (DEBUG) Serial.println(msg);
   if (commandClient && commandClient.connected()) commandClient.println(msg);
   if (webSocketLive) {
-    String wscopy = msg;
-    webSocket.broadcastTXT(wscopy);
+    wsTxEnqueue(msg);
   }
 }
 
@@ -276,7 +298,8 @@ void pollEmergencyInputs() {
 
 void printLimitStatus() {
   // S5H: 0 = at Hall zero, 1 = away (unlike S2–S4 where 1 = limit hit).
-  printlnControl("LIMITS S2=" + String(stage2LimitHit ? "1" : "0") +
+  printlnControl("LIMITS S1=" + String(stage1CWLimitHit ? "1" : "0") +
+              " S2=" + String(stage2LimitHit ? "1" : "0") +
               " S3=" + String(stage3LimitHit ? "1" : "0") +
               " S4=" + String(stage4LimitHit ? "1" : "0") +
               " S5H=" + String(stage5HallAtZero ? "0" : "1"));
@@ -288,27 +311,45 @@ void parseSensorMessage(String msg) {
 
   if (!msg.startsWith("LIM ")) return;
 
+  const bool prevS1 = stage1CWLimitHit;
   const bool prevS2 = stage2LimitHit;
   const bool prevS3 = stage3LimitHit;
   const bool prevS4 = stage4LimitHit;
   const bool prevS5Hall = stage5HallAtZero;
 
-  int s2pos = msg.indexOf("S2=");
-  int s3pos = msg.indexOf("S3=");
-  int s4pos = msg.indexOf("S4=");
-  int s5hpos = msg.indexOf("S5H=");
+  // Space-prefixed tokens avoid false matches (e.g. stray "S1=" in other fields).
+  // If S1 is missing from the line, clear turntable CW limit (stale S1=1 was blocking s1cw / c6f).
+  int s1p = msg.indexOf(" S1=");
+  if (s1p >= 0 && s1p + 4 < (int)msg.length()) {
+    char c1 = msg.charAt(s1p + 4);
+    if (c1 == '1') stage1CWLimitHit = true;
+    else if (c1 == '0') stage1CWLimitHit = false;
+  } else {
+    stage1CWLimitHit = false;
+  }
 
-  if (s2pos >= 0 && s2pos + 3 < (int)msg.length()) {
-    stage2LimitHit = (msg.charAt(s2pos + 3) == '1');
+  int s2pos = msg.indexOf(" S2=");
+  int s3pos = msg.indexOf(" S3=");
+  int s4pos = msg.indexOf(" S4=");
+  int s5hpos = msg.indexOf(" S5H=");
+
+  if (s2pos >= 0 && s2pos + 4 < (int)msg.length()) {
+    char c2 = msg.charAt(s2pos + 4);
+    if (c2 == '1') stage2LimitHit = true;
+    else if (c2 == '0') stage2LimitHit = false;
   }
-  if (s3pos >= 0 && s3pos + 3 < (int)msg.length()) {
-    stage3LimitHit = (msg.charAt(s3pos + 3) == '1');
+  if (s3pos >= 0 && s3pos + 4 < (int)msg.length()) {
+    char c3 = msg.charAt(s3pos + 4);
+    if (c3 == '1') stage3LimitHit = true;
+    else if (c3 == '0') stage3LimitHit = false;
   }
-  if (s4pos >= 0 && s4pos + 3 < (int)msg.length()) {
-    stage4LimitHit = (msg.charAt(s4pos + 3) == '1');
+  if (s4pos >= 0 && s4pos + 4 < (int)msg.length()) {
+    char c4 = msg.charAt(s4pos + 4);
+    if (c4 == '1') stage4LimitHit = true;
+    else if (c4 == '0') stage4LimitHit = false;
   }
-  if (s5hpos >= 0 && s5hpos + 4 < (int)msg.length()) {
-    bool s5 = (msg.charAt(s5hpos + 4) == '0');
+  if (s5hpos >= 0 && s5hpos + 5 < (int)msg.length()) {
+    bool s5 = (msg.charAt(s5hpos + 5) == '0');
     stage5HallAtZero = s5;
     if (s5 && !prevS5Hall) {
       printlnDebug("S5 HALL: at zero (sensor)");
@@ -317,7 +358,8 @@ void parseSensorMessage(String msg) {
     }
   }
 
-  bool stateChanged = (prevS2 != stage2LimitHit) ||
+  bool stateChanged = (prevS1 != stage1CWLimitHit) ||
+                      (prevS2 != stage2LimitHit) ||
                       (prevS3 != stage3LimitHit) ||
                       (prevS4 != stage4LimitHit) ||
                       (prevS5Hall != stage5HallAtZero);
@@ -350,9 +392,15 @@ void serviceSensorUART() {
 // Stage 2:  s2down -> forward=false (blocked by limit)
 // Stage 3:  s3down -> forward=true  (blocked by limit)
 // Stage 4:  s4down -> forward=true  (blocked by limit)
+// Stage 1: turntable CW limit on sensor D13 — blocks s1cw only (CCW still allowed).
 // Stage 5: no limit switch blocking (Hall S5H is for homing only, not hard stop)
 // =========================
 bool shouldStopMotor(int motorIndex, bool forward) {
+  if (motorIndex == STAGE1) {
+    bool movingCW = forward;
+    return stage1CWLimitHit && movingCW;
+  }
+
   if (motorIndex == STAGE2_RIGHT || motorIndex == STAGE2_LEFT) {
     bool movingDown = !forward;
     return stage2LimitHit && movingDown;
@@ -937,7 +985,8 @@ bool homeStage1SoftZero() {
   for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
   p[STAGE1] = 0;
   applyPositionState(p);
-  printlnDebug("HOME S1: soft zero (C6=0 at current position)");
+  printlnBoth("HOME S1: soft zero only (C6=0 here; no turntable motion). "
+              "If CW jog is blocked, check LIMITS S1= / sensor S1 debounce.");
   return true;
 }
 
@@ -1114,6 +1163,7 @@ void printHelp() {
   printlnBoth("");
 
   printlnBoth("Other:");
+  printlnBoth("  ip            -> print this board WiFi IP and hostname");
   printlnBoth("  speed 800     -> set pulse delay in microseconds");
   printlnBoth("  where         -> print current tracked positions");
   printlnBoth("  setpos p1 p2 p3 p4 p5 p6 -> overwrite tracked positions");
@@ -1133,6 +1183,7 @@ void printHelp() {
   printlnBoth("  vac off");
   printlnBoth("  saw on");
   printlnBoth("  saw off");
+  printlnBoth("  saw speed <0-100>  -> BLDC PWM on MOSFET board GPIO 22 (forwarded to slave)");
   printlnBoth("  alloff");
   printlnBoth("  mstatus");
   printlnBoth("");
@@ -1146,6 +1197,14 @@ void printHelp() {
 // =========================
 // Command handling
 // =========================
+static void printWifiIpLine() {
+  if (WiFi.status() == WL_CONNECTED) {
+    printlnBoth(String("IP ") + WiFi.localIP().toString() + " hostname " + WIFI_HOSTNAME);
+  } else {
+    printlnBoth("IP (WiFi not connected)");
+  }
+}
+
 void handleCommand(String cmd) {
   cmd.trim();
   cmd.toLowerCase();
@@ -1162,6 +1221,11 @@ void handleCommand(String cmd) {
   if (cmd == "help") {
     printHelp();
     sendDONE("help");
+    return;
+  }
+
+  if (cmd == "ip") {
+    printWifiIpLine();
     return;
   }
 
@@ -1481,6 +1545,15 @@ void handleCommand(String cmd) {
   if (cmd == "alloff")  { sendToSlave("ALL OFF"); sendDONE("alloff");  return; }
   if (cmd == "mstatus") { sendToSlave("STATUS");  sendDONE("mstatus"); return; }
 
+  if (cmd.startsWith("saw speed ")) {
+    int v = cmd.substring(10).toInt();
+    if (v < 0) v = 0;
+    if (v > 100) v = 100;
+    sendToSlave("SAW SPEED " + String(v));
+    sendDONE("saw speed");
+    return;
+  }
+
   sendERR(cmd, "unknown command");
 }
 
@@ -1625,7 +1698,10 @@ void loop() {
   readFromSlave();
   serviceSensorUART();
   if (httpServerLive) httpServer.handleClient();
-  if (webSocketLive) webSocket.loop();
+  if (webSocketLive) {
+    webSocket.loop();
+    wsTxFlush();
+  }
   if (WiFi.status() == WL_CONNECTED) ArduinoOTA.handle();
 }
 

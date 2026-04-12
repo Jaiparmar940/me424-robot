@@ -77,11 +77,14 @@ Stage 2 uses two motors (controllers 1 and 4) driven in sync. Controller 4 has i
 
 ### MOSFET Board
 
+GPIO **18** and **19** are the usual **MOSFET-switched** loads (mag, vac). GPIO **22** is different: it is a **small-signal / PWM line into an external BLDC driver module** (ESC or similar), not a discrete power MOSFET driven directly like 18/19. GPIO **23** enables saw **power** ahead of that driver.
+
 | Function | GPIO | Mode | Notes |
 |---|---|---|---|
-| Electromagnet output | 18 | OUTPUT | Active HIGH |
-| Vacuum output | 19 | OUTPUT | Active HIGH |
-| Saw output | 21 | OUTPUT | Active HIGH |
+| Electromagnet output | 18 | OUTPUT | Active HIGH → MOSFET (or equivalent) |
+| Vacuum output | 19 | OUTPUT | Active HIGH → MOSFET (or equivalent) |
+| Saw power / enable | 23 | OUTPUT | Active HIGH — supply or enable path to the BLDC driver |
+| BLDC driver speed input | 22 | LEDC ~5 kHz | PWM duty 0–100% via `SAW SPEED` (driver module input; only while `SAW ON`) |
 | UART RX (from Main TX) | 25 | UART1 RX | Cross-wired to Main GPIO 17 |
 | UART TX (to Main RX) | 26 | UART1 TX | Cross-wired to Main GPIO 16 |
 | USB Serial (debug) | Default | UART0 | 115200 baud |
@@ -162,8 +165,9 @@ These are forwarded from the Main Board to the MOSFET Board over UART.
 | `mag on` / `mag off` | `MAG ON` / `MAG OFF` | `ACK MAG ON` / `ACK MAG OFF` |
 | `vac on` / `vac off` | `VAC ON` / `VAC OFF` | `ACK VAC ON` / `ACK VAC OFF` |
 | `saw on` / `saw off` | `SAW ON` / `SAW OFF` | `ACK SAW ON` / `ACK SAW OFF` |
+| `saw speed <0–100>` | `SAW SPEED <n>` | `ACK SAW SPEED <n>` — PWM on MOSFET **GPIO 22** while saw is on |
 | `alloff` | `ALL OFF` | `ACK ALL OFF` |
-| `mstatus` | `STATUS` | `STATUS MAG=ON/OFF VAC=ON/OFF SAW=ON/OFF` |
+| `mstatus` | `STATUS` | `STATUS … SAW_SPD=<0–100> …` |
 
 ### Sequence Commands
 
@@ -516,7 +520,7 @@ Sequence items are one of:
 | `ACK VAC ON` / `ACK VAC OFF` | Vacuum toggled |
 | `ACK SAW ON` / `ACK SAW OFF` | Saw toggled |
 | `ACK ALL OFF` | All outputs turned off |
-| `STATUS MAG=<ON\|OFF> VAC=<ON\|OFF> SAW=<ON\|OFF>` | Current output states |
+| `STATUS … SAW_SPD=<0–100> …` | Current outputs + saw PWM setpoint |
 | `ERR UNKNOWN_CMD` | Unrecognized command received |
 
 #### Commands Accepted (Main -> MOSFET)
@@ -527,7 +531,7 @@ Sequence items are one of:
 | `VAC ON` / `VAC OFF` | `ACK VAC ON` / `ACK VAC OFF` |
 | `SAW ON` / `SAW OFF` | `ACK SAW ON` / `ACK SAW OFF` |
 | `ALL OFF` | `ACK ALL OFF` |
-| `STATUS` | `STATUS MAG=... VAC=... SAW=...` |
+| `STATUS` | `STATUS MAG=... VAC=... SAW=... SAW_SPD=... TOOL_R=...` |
 
 ---
 
