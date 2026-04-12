@@ -22,6 +22,9 @@ const int UART_TX_PIN = 27;
 const long UART_BAUD = 115200;
 
 // Limit switches (wired to GND)
+// Stage 1 turntable: CW-only limit (sensor D13). S1=1 when active (blocks s1cw on main).
+const int STAGE1_CW_LIMIT_PIN = 13;
+
 const int STAGE3_LIMIT_PIN = 32;
 const int STAGE2_LIMIT_PIN = 33;
 const int STAGE4_LIMIT_PIN = 25;
@@ -34,8 +37,15 @@ const int STAGE5_HALL_PIN = 14;
 // false: pin LOW = at Hall zero (typical HW-477 wiring); set true if your module is the opposite.
 const bool S5_HALL_AT_ZERO_ACTIVE_HIGH = false;
 
+// S1–S4 mechanical switches: pin must read stable this long before we change UART (ms).
+// Override from PlatformIO: -D LIMIT_MECH_DEBOUNCE_MS=80
+#ifndef LIMIT_MECH_DEBOUNCE_MS
+#define LIMIT_MECH_DEBOUNCE_MS 60
+#endif
+
 String uartBuffer = "";
 
+bool lastStage1 = false;
 bool lastStage2 = false;
 bool lastStage3 = false;
 bool lastStage4 = false;
@@ -44,16 +54,56 @@ bool stage5HallRaw = false;
 unsigned long stage5HallRawChangeMs = 0;
 const unsigned long S5_HALL_DEBOUNCE_MS = 25;
 
-bool readStage2Hit() {
+struct MechLimitDebouncer {
+  bool pendingRaw = false;
+  unsigned long changeMs = 0;
+  bool stable = false;
+};
+
+static MechLimitDebouncer debS1, debS2, debS3, debS4;
+
+/** rawHit: true when switch active (pin LOW with INPUT_PULLUP). Returns debounced hit. */
+static bool debounceMech(MechLimitDebouncer &d, bool rawHit) {
+  if (rawHit != d.pendingRaw) {
+    d.pendingRaw = rawHit;
+    d.changeMs = millis();
+  }
+  if ((millis() - d.changeMs) >= (unsigned long)LIMIT_MECH_DEBOUNCE_MS && d.stable != d.pendingRaw) {
+    d.stable = d.pendingRaw;
+  }
+  return d.stable;
+}
+
+bool readStage1CWHitRaw() {
+  return digitalRead(STAGE1_CW_LIMIT_PIN) == LOW;
+}
+
+bool readStage1CWHit() {
+  return debounceMech(debS1, readStage1CWHitRaw());
+}
+
+bool readStage2HitRaw() {
   return digitalRead(STAGE2_LIMIT_PIN) == LOW;
 }
 
-bool readStage3Hit() {
+bool readStage3HitRaw() {
   return digitalRead(STAGE3_LIMIT_PIN) == LOW;
 }
 
-bool readStage4Hit() {
+bool readStage4HitRaw() {
   return digitalRead(STAGE4_LIMIT_PIN) == LOW;
+}
+
+bool readStage2Hit() {
+  return debounceMech(debS2, readStage2HitRaw());
+}
+
+bool readStage3Hit() {
+  return debounceMech(debS3, readStage3HitRaw());
+}
+
+bool readStage4Hit() {
+  return debounceMech(debS4, readStage4HitRaw());
 }
 
 bool readStage5HallAtZeroRaw() {
@@ -76,13 +126,15 @@ bool readStage5HallAtZero() {
 }
 
 void sendLimitStatus() {
+  bool s1 = readStage1CWHit();
   bool s2 = readStage2Hit();
   bool s3 = readStage3Hit();
   bool s4 = readStage4Hit();
   bool s5h = readStage5HallAtZero();
 
   // S5H: 0 = at Hall zero position, 1 = away (opposite sense from S2–S4 limits).
-  String msg = "LIM S2=" + String(s2 ? "1" : "0") +
+  String msg = "LIM S1=" + String(s1 ? "1" : "0") +
+               " S2=" + String(s2 ? "1" : "0") +
                " S3=" + String(s3 ? "1" : "0") +
                " S4=" + String(s4 ? "1" : "0") +
                " S5H=" + String(s5h ? "0" : "1");
@@ -90,10 +142,22 @@ void sendLimitStatus() {
   MainSerial.println(msg);
   Serial.println(msg);
 
+  lastStage1 = s1;
   lastStage2 = s2;
   lastStage3 = s3;
   lastStage4 = s4;
   lastStage5Hall = s5h;
+}
+
+static void printIpToSerialAndMain() {
+  String line;
+  if (WiFi.status() == WL_CONNECTED) {
+    line = String("IP ") + WiFi.localIP().toString() + " hostname " + WIFI_HOSTNAME;
+  } else {
+    line = "IP (WiFi not connected)";
+  }
+  Serial.println(line);
+  MainSerial.println(line);
 }
 
 void handleCommand(String cmd) {
@@ -104,6 +168,11 @@ void handleCommand(String cmd) {
 
   if (cmd == "STATUS") {
     sendLimitStatus();
+    return;
+  }
+
+  if (cmd == "IP") {
+    printIpToSerialAndMain();
     return;
   }
 
@@ -132,6 +201,7 @@ void setup() {
     Serial.println("WiFi disabled (set WIFI_SSID/WIFI_PASSWORD build flags)");
   }
 
+  pinMode(STAGE1_CW_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE2_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE3_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE4_LIMIT_PIN, INPUT_PULLUP);
@@ -139,14 +209,35 @@ void setup() {
 
   delay(200);
 
-  lastStage2 = readStage2Hit();
-  lastStage3 = readStage3Hit();
-  lastStage4 = readStage4Hit();
+  bool ir1 = readStage1CWHitRaw();
+  lastStage1 = ir1;
+  debS1.pendingRaw = ir1;
+  debS1.stable = ir1;
+  debS1.changeMs = millis();
+
+  bool ir2 = readStage2HitRaw();
+  lastStage2 = ir2;
+  debS2.pendingRaw = ir2;
+  debS2.stable = ir2;
+  debS2.changeMs = millis();
+
+  bool ir3 = readStage3HitRaw();
+  lastStage3 = ir3;
+  debS3.pendingRaw = ir3;
+  debS3.stable = ir3;
+  debS3.changeMs = millis();
+
+  bool ir4 = readStage4HitRaw();
+  lastStage4 = ir4;
+  debS4.pendingRaw = ir4;
+  debS4.stable = ir4;
+  debS4.changeMs = millis();
   lastStage5Hall = readStage5HallAtZeroRaw();
   stage5HallRaw = lastStage5Hall;
   stage5HallRawChangeMs = millis();
 
-  Serial.println("Sensor board ready (S5 hall on GPIO14)");
+  Serial.println(String("Sensor board ready (S1–S4 mech debounce ") + LIMIT_MECH_DEBOUNCE_MS +
+                 " ms, S5 hall GPIO14)");
   MainSerial.println("SENSOR READY");
   sendLimitStatus();
 }
@@ -166,6 +257,7 @@ void loop() {
     }
   }
 
+  bool s1 = readStage1CWHit();
   bool s2 = readStage2Hit();
   bool s3 = readStage3Hit();
   bool s4 = readStage4Hit();
@@ -179,7 +271,8 @@ void loop() {
     }
   }
 
-  if (s2 != lastStage2 || s3 != lastStage3 || s4 != lastStage4 || s5h != lastStage5Hall) {
+  if (s1 != lastStage1 || s2 != lastStage2 || s3 != lastStage3 || s4 != lastStage4 ||
+      s5h != lastStage5Hall) {
     sendLimitStatus();
   }
   if (WiFi.status() == WL_CONNECTED) ArduinoOTA.handle();

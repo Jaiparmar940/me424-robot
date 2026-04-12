@@ -13,6 +13,9 @@
       <button id="connectBtn">Connect</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
       <button id="refreshPosBtn" disabled>Refresh Positions</button>
+      <button id="estopBtn" class="btn-estop" disabled>ESTOP</button>
+      <button id="estopClearBtn" class="btn-estop-clear" disabled>Clear ESTOP</button>
+      <span id="estopStatus" class="badge estop-badge">ESTOP: clear</span>
       <span id="connStatus" class="badge">Disconnected</span>
       <label class="robot-host-label">Robot host (WebSocket)
         <input id="robotHost" type="text" value="me424-main.local" spellcheck="false" autocomplete="off" />
@@ -39,6 +42,44 @@
         </label>
       </div>
       <div id="axisGrid" class="axis-grid"></div>
+    </section>
+
+    <section class="card" id="mosfetControlCard">
+      <h2>MOSFET / attachments</h2>
+      <p class="hint">Sends the same commands as the console (<code>mag on</code>, <code>vac off</code>, …) to the main board; the main forwards to the MOSFET slave. <strong>Saw power</strong> is GPIO <strong>23</strong> on the slave; <strong>BLDC throttle</strong> is PWM on slave GPIO <strong>22</strong> (<code>saw speed 0–100</code>). PWM is applied only while <code>saw on</code>. Button highlights follow the slave <code>STATUS</code>; speed syncs from <code>SAW_SPD</code> / <code>ACK SAW SPEED</code>.</p>
+      <div class="mosfet-bldc-speed">
+        <label class="mosfet-bldc-speed-label">
+          <span>Saw BLDC speed (MOSFET GPIO 22) <strong id="sawBldcSpeedPct">0</strong>%</span>
+          <input type="range" id="sawBldcSpeedSlider" min="0" max="100" value="0" disabled />
+        </label>
+      </div>
+      <div class="tool-readout" aria-live="polite">
+        <div class="tool-readout-title">Connected tool (ID resistor)</div>
+        <div id="toolReadoutMain" class="tool-readout-main">—</div>
+        <div id="toolReadoutSub" class="tool-readout-sub"></div>
+        <p class="tool-readout-legend hint">2.2 kΩ → Saw · 5 kΩ → Probe · 10 kΩ → Vacuum. Values come from <code>mstatus</code> / slave <code>STATUS</code>.</p>
+      </div>
+      <div class="row wrap mosfet-rows">
+        <div class="mosfet-group">
+          <span class="mosfet-group-title">Magnet</span>
+          <button type="button" class="mosfet-send" data-cmd="mag on" data-channel="mag" data-want-on="true" disabled>On</button>
+          <button type="button" class="mosfet-send" data-cmd="mag off" data-channel="mag" data-want-on="false" disabled>Off</button>
+        </div>
+        <div class="mosfet-group">
+          <span class="mosfet-group-title">Vacuum</span>
+          <button type="button" class="mosfet-send" data-cmd="vac on" data-channel="vac" data-want-on="true" disabled>On</button>
+          <button type="button" class="mosfet-send" data-cmd="vac off" data-channel="vac" data-want-on="false" disabled>Off</button>
+        </div>
+        <div class="mosfet-group">
+          <span class="mosfet-group-title">Saw</span>
+          <button type="button" class="mosfet-send" data-cmd="saw on" data-channel="saw" data-want-on="true" disabled>On</button>
+          <button type="button" class="mosfet-send" data-cmd="saw off" data-channel="saw" data-want-on="false" disabled>Off</button>
+        </div>
+        <div class="mosfet-group mosfet-group-util">
+          <button type="button" class="mosfet-send mosfet-alloff" data-cmd="alloff" disabled>All off</button>
+          <button type="button" class="mosfet-send" data-cmd="mstatus" disabled>Status</button>
+        </div>
+      </div>
     </section>
 
     <section class="card">
@@ -68,6 +109,10 @@
             <option value="vac off">vac off</option>
             <option value="saw on">saw on</option>
             <option value="saw off">saw off</option>
+            <option value="saw speed 25">saw speed 25</option>
+            <option value="saw speed 50">saw speed 50</option>
+            <option value="saw speed 75">saw speed 75</option>
+            <option value="saw speed 100">saw speed 100</option>
             <option value="alloff">alloff</option>
             <option value="mstatus">mstatus</option>
           </select>
