@@ -1,0 +1,10 @@
+sudo shutdown -h now
+
+rsync -av --delete ./arm_robot_bridge/ ramses-user@172.28.205.104:~/ros2_ws/src/arm_robot_bridge/
+
+copy py files over to pi:
+scp -r arm_robot_bridge ramses-user@172.28.205.104:/home/ramses-user/ros2_ws/src/
+
+every new session:
+source /opt/ros/jazzy/setup.bash
+source ~/ros2_ws/install/setup.bash

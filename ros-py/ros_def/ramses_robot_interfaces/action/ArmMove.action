@@ -1,0 +1,29 @@
+# ============================================================
+# ArmMove.action
+# Used by the ESP32 bridge action server for all blocking
+# motion commands (syncabs, sXup/down, home, qrun, etc.)
+# ============================================================
+
+# --- GOAL ---
+# The raw firmware command string to send over serial.
+# Examples:
+#   "syncabs 0 0 0 500 0 0 800 40"
+#   "s2up 400"
+#   "home s3"
+#   "qrun"
+string command
+
+---
+
+# --- RESULT ---
+# Whether the command completed successfully.
+bool success
+# The final response token from the ESP32 ("DONE ..." or "ERR ...").
+string response
+
+---
+
+# --- FEEDBACK ---
+# Intermediate status updates while the command is running.
+# The bridge emits one feedback message when ACK is received.
+string status

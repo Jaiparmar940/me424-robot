@@ -1,0 +1,260 @@
+# --- SYSTEM SETUP ---
+sudo apt update
+sudo apt upgrade -y
+sudo apt install -y software-properties-common curl
+sudo add-apt-repository universe -y
+
+# --- FIX UBUNTU SOURCES ---
+sudo sed -i 's/^Suites: noble$/Suites: noble noble-updates/' /etc/apt/sources.list.d/ubuntu.sources
+
+sudo apt update
+sudo apt --fix-broken install -y
+sudo apt upgrade -y
+
+# --- ROS 2 REPO ---
+export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F '"tag_name"' | head -n 1 | cut -d '"' -f 4)
+
+curl -L -o /tmp/ros2-apt-source.deb \
+"https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.noble_all.deb"
+
+sudo dpkg -i /tmp/ros2-apt-source.deb
+
+# --- INSTALL ROS ---
+sudo apt update
+sudo apt install -y ros-jazzy-ros-base
+
+# --- ENV ---
+echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+# --- DEV TOOLS ---
+sudo apt install -y python3-colcon-common-extensions python3-rosdep
+sudo rosdep init
+rosdep update
+
+# --- WORKSPACE ---
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+# --- CREATE PACKAGE ---
+ros2 pkg create arm_robot_bridge --build-type ament_python
+
+# --- FIX STRUCTURE ---
+touch ~/ros2_ws/src/arm_robot_bridge/arm_robot_bridge/__init__.py
+
+# --- FIX setup.cfg ---
+cat <<EOF > ~/ros2_ws/src/arm_robot_bridge/setup.cfg
+[develop]
+script_dir=\$base/lib/arm_robot_bridge
+[install]
+install_scripts=\$base/lib/arm_robot_bridge
+EOF
+
+# --- FIX package.xml ---
+sed -i '/<buildtool_depend>/a \ \n  <export>\n    <build_type>ament_python</build_type>\n  </export>' \
+~/ros2_ws/src/arm_robot_bridge/package.xml
+
+# --- BUILD ---
+cd ~/ros2_ws
+colcon build
+
+# --- SOURCE ---
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+
+# --- SYSTEM SETUP ---
+sudo apt update
+sudo apt upgrade -y
+sudo apt install -y software-properties-common curl
+sudo add-apt-repository universe -y
+
+# --- FIX UBUNTU SOURCES (CRITICAL) ---
+sudo sed -i 's/^Suites: noble$/Suites: noble noble-updates/' /etc/apt/sources.list.d/ubuntu.sources
+
+sudo apt update
+sudo apt --fix-broken install -y
+sudo apt upgrade -y
+
+# --- ROS 2 REPO ---
+export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F '"tag_name"' | head -n 1 | cut -d '"' -f 4)
+
+curl -L -o /tmp/ros2-apt-source.deb \
+"https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.noble_all.deb"
+
+sudo dpkg -i /tmp/ros2-apt-source.deb
+
+# --- INSTALL ROS ---
+sudo apt update
+sudo apt install -y ros-jazzy-ros-base
+
+# --- ENVIRONMENT SETUP ---
+echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+# --- DEV TOOLS ---
+sudo apt install -y python3-colcon-common-extensions python3-rosdep
+sudo rosdep init
+rosdep update
+
+# --- WORKSPACE ---
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws
+
+# --- CREATE PACKAGE ---
+cd ~/ros2_ws/src
+ros2 pkg create arm_robot_bridge --build-type ament_python
+
+# --- FIX STRUCTURE ---
+touch ~/ros2_ws/src/arm_robot_bridge/arm_robot_bridge/__init__.py
+
+# --- BUILD ---
+cd ~/ros2_ws
+colcon build
+
+# --- SOURCE WORKSPACE ---
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+
+
+
+
+
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+#------------------------------------#
+
+
+
+sudo apt update
+sudo apt upgrade -y
+sudo apt install -y software-properties-common curl
+sudo add-apt-repository universe -y
+
+export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F '"tag_name"' | head -n 1 | cut -d '"' -f 4)
+
+curl -L -o /tmp/ros2-apt-source.deb \
+"https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.noble_all.deb"
+
+sudo dpkg -i /tmp/ros2-apt-source.deb
+
+sudo apt update
+sudo apt install -y ros-jazzy-ros-base
+
+echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+
+sudo apt install -y python3-colcon-common-extensions python3-rosdep
+sudo rosdep init
+rosdep update
+
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws
+colcon build
+source install/setup.bash
+
+cd ~/ros2_ws/src
+ros2 pkg create arm_robot_bridge --build-type ament_python
+
+cd ~/ros2_ws/src/arm_robot_bridge
+
+touch arm_robot_bridge/__init__.py
+
+nano setup.cfg
+
+-------------------------------
+paste this into setup.cfg:
+
+[develop]
+script_dir=$base/lib/arm_robot_bridge
+[install]
+install_scripts=$base/lib/arm_robot_bridge
+
+-------------------------------
+nano setup.py
+
+-------------------------------
+paste this into setup.py:
+
+from setuptools import setup
+
+package_name = 'arm_robot_bridge'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=[package_name],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='ramses-user',
+    maintainer_email='you@email.com',
+    description='ROS2 bridge to ESP32',
+    license='TODO',
+    entry_points={
+        'console_scripts': [],
+    },
+)
+
+--------------------------------
+nano package.xml
+
+-------------------------------
+paste this into package.xml:
+
+<buildtool_depend>ament_python</buildtool_depend>
+
+<export>
+  <build_type>ament_python</build_type>
+</export>
+
+--------------------------------
+cd ~/ros2_ws
+rm -rf build install log
+
+cd ~/ros2_ws/src
+ros2 pkg create arm_robot_bridge --build-type ament_python
+cd ~/ros2_ws/src/arm_robot_bridge
+touch arm_robot_bridge/__init__.py
+nano setup.cfg
+
+-------------------------------
+paste this into setup.cfg:
+
+[develop]
+script_dir=$base/lib/arm_robot_bridge
+[install]
+install_scripts=$base/lib/arm_robot_bridge
+
+-------------------------------
+
+nano package.xml
+
+-------------------------------
+paste this into package.xml:
+
+<buildtool_depend>ament_python</buildtool_depend>
+
+<export>
+  <build_type>ament_python</build_type>
+</export>
+--------------------------------
+
+cd ~/ros2_ws
+rm -rf build install log
+colcon build --packages-select arm_robot_bridge
+
+source install/setup.bash

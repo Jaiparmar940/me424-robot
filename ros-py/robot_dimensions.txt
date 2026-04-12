@@ -1,0 +1,32 @@
+Global Origin (0, 0, 0): at the center of the turntable (x, y), and the height of the the top surface of the docking station (z)
+The axis pointing from the turntable out towards the docking station is the positive x-axis.
+
+This means the attachment docking stations have the following coordinates, in inches:
+   1. Probe: (9.515, 4.434, 0.0)
+   2. Bonesaw: (10.5, 0.0, 0.0)
+   3. Vaccuum: (9.515, -4.434, 0.0)
+
+Regarding the links - Consider S1 through S5 as the joints of the robot arm, with S1 being the base joint and S5 being the end effector joint. The lengths of the links between these joints are as follows:
+- L1 (between S1 and S2): 6.335 inches. Note that S2 will be at (0, 0, 6.335) always, since it is directly above S1, which rotates about the z-axis.
+- L2 (between S2 and S3): 10.0 inches
+- L3 (between S3 and S4): 8.0 inches
+- L4 (between S4 and S5): 3.209 inches
+- L5 (between S5 and the connector ending): 1.143 inch (the length to the connector - note that this distance is an extension of the L4 distance, and the significance is that the 'twist' along the L4/L5 link if at this point)
+- L6 - this is essentially the link from the end of the connector to the tip of the end effectors. This will vary for each attachment, and will not always be centered on the end of the connector. Let's define a coordinate system for the end of the connector, with the z-axis pointing outwards from the connector, the x-axis pointing to the right of the connector, and the y-axis pointing upwards along the connector. Let the origin be that end of L5. The the L6 coordinates for each attachment are as follows:
+   1. Probe: (0.0, 0.0, 5.350)
+   2. Bonesaw: (0.0, 4.705, 2.197)
+   3. Vaccuum: (0.0, 0.0, 2.635) 
+
+For joint rotational limits (these need to be verified/calibrated, but are ballpark estimates):
+- S1: -129 degree to 156 degrees (with 0 degrees being the position where the arm is pointing directly towards the docking station, and positive rotation being counterclockwise when looking down from above). The limit switch will be at the lower limit.
+- S2: -94.16 degree to 86 degrees (with 0 degrees being the position where the arm is fully extended vertically upwards, and positive rotation being counterclockwise. So all stages are at their zero, decreasing S2 will lower the arm towards the +X axis) The limit switch will be at the lower limit.
+- S3: -113 degree to 79.6 degrees (with 0 degrees being the position where the arm is straight vertical up when all stages are at their zero, and negative rotation will lower the arm towards the +X axis when all stages are zero). The limit switch will be at the lower limit.
+- S4: -83 degree to 79 degrees (with 0 degrees being the position where the arm is straight vertical up when all stages are at their zero, and negative rotation will lower the arm towards the +X axis when all stages are zero). The limit switch will be at the lower limit.
+- S5: -180 degrees to 180 degrees (with 0 degrees being the position where the end effector is in its default orientation, and positive rotation being counterclockwise when looking along the L4/L5 link from S4 towards S5). The limit is a hall effect at -180 degrees.
+
+Stage steps pre revolution (with 16x microstepping):
+- S1: 16640
+- S2: 57600
+- S3: 38400
+- S4: 33600
+- S5: 3200
