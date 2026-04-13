@@ -1,13 +1,13 @@
 const AXES = [
   // Ordered by stage number, not controller number.
-  { idx: 5, name: 'Stage 1 / Turntable (C6)', plus: 'c6f', minus: 'c6r', homeCmd: 'home s1' },
+  { idx: 5, name: 'Stage 1 / Turntable (C6)', plus: 'c6f', minus: 'c6r', homeCmd: 'home s1 bounce' },
   // Stage 2 is physically paired (C1 + C4). Jogging either raw controller now
   // moves both in firmware, so show one unified control here.
-  { idx: 0, name: 'Stage 2 / Lift Pair (C1 + C4)', plus: 'c1f', minus: 'c1r', homeCmd: 'home s2' },
+  { idx: 0, name: 'Stage 2 / Lift Pair (C1 + C4)', plus: 'c1f', minus: 'c1r', homeCmd: 'home s2 bounce' },
   // Match firmware: s3up/s4up = reverse (c2r/c3r), s3down/s4down = forward (c2f/c3f).
-  { idx: 1, name: 'Stage 3 (C2)', plus: 'c2r', minus: 'c2f', homeCmd: 'home s3' },
-  { idx: 2, name: 'Stage 4 (C3)', plus: 'c3r', minus: 'c3f', homeCmd: 'home s4' },
-  { idx: 4, name: 'Stage 5 (C5)', plus: 'c5f', minus: 'c5r', homeCmd: 'home s5' },
+  { idx: 1, name: 'Stage 3 (C2)', plus: 'c2r', minus: 'c2f', homeCmd: 'home s3 bounce' },
+  { idx: 2, name: 'Stage 4 (C3)', plus: 'c3r', minus: 'c3f', homeCmd: 'home s4 bounce' },
+  { idx: 4, name: 'Stage 5 (C5)', plus: 'c5f', minus: 'c5r', homeCmd: 'home s5 bounce' },
 ];
 
 const WS_PORT = 81;
@@ -305,7 +305,7 @@ const els = {
   jogRamp: document.getElementById('jogRamp'),
   axisGrid: document.getElementById('axisGrid'),
   zeroAllBtn: document.getElementById('zeroAllBtn'),
-  home234Btn: document.getElementById('home234Btn'),
+  limitAutohomeBtn: document.getElementById('limitAutohomeBtn'),
   liftAutohomeBtn: document.getElementById('liftAutohomeBtn'),
   goToVerticalBtn: document.getElementById('goToVerticalBtn'),
   recordPoseBtn: document.getElementById('recordPoseBtn'),
@@ -343,10 +343,11 @@ function updateEStopUI() {
   if (els.estopClearBtn) els.estopClearBtn.disabled = !linkReady || !estopLatchedUI;
 
   const disableMotion = !linkReady || estopLatchedUI;
-  const motionIds = ['home234Btn', 'goToVerticalBtn', 'runSequenceBtn', 'stopSequenceBtn'];
+  const motionIds = ['goToVerticalBtn', 'runSequenceBtn', 'stopSequenceBtn'];
   motionIds.forEach((id) => {
     if (els[id]) els[id].disabled = disableMotion;
   });
+  if (els.limitAutohomeBtn) els.limitAutohomeBtn.disabled = disableMotion || liftRoutineRunning;
   if (els.liftAutohomeBtn) els.liftAutohomeBtn.disabled = disableMotion || liftRoutineRunning;
   document.querySelectorAll('[id^="minus_"], [id^="plus_"], [id^="autohome_"]').forEach((b) => {
     b.disabled = disableMotion;
@@ -390,7 +391,7 @@ function setConnectedUI(connected) {
   els.disconnectBtn.disabled = !connected;
   els.refreshPosBtn.disabled = !connected;
   els.zeroAllBtn.disabled = !connected;
-  els.home234Btn.disabled = !connected;
+  if (els.limitAutohomeBtn) els.limitAutohomeBtn.disabled = !connected || liftRoutineRunning;
   if (els.liftAutohomeBtn) els.liftAutohomeBtn.disabled = !connected || liftRoutineRunning;
   if (els.goToVerticalBtn) els.goToVerticalBtn.disabled = !connected;
   els.recordPoseBtn.disabled = !connected;
@@ -738,7 +739,7 @@ async function zeroAll() {
 }
 
 /** Firmware homing: limits for S2–S4, Hall S5H for S5, soft zero for S1. */
-const HOME_CMD_TIMEOUT_MS = 180000;
+const HOME_CMD_TIMEOUT_MS = 30000;
 
 async function autoHomeStage(homeCmd) {
   if (shouldAbortAutomation()) return;
@@ -753,28 +754,6 @@ async function autoHomeStage(homeCmd) {
   }
 }
 
-async function home234() {
-  stopRequested = false;
-  for (const cmd of ['home s2', 'home s3', 'home s4']) {
-    if (shouldAbortAutomation()) {
-      log('Home 2–4 cancelled by ESTOP/stop request');
-      break;
-    }
-    try {
-      await sendLine(cmd);
-      const r = await waitForFirmwareCompletion(cmd, HOME_CMD_TIMEOUT_MS);
-      if (!r.ok) {
-        log(`Home 2–4: ${r.line}`);
-        break;
-      }
-      await refreshPositionFromRobot(HOME_CMD_TIMEOUT_MS);
-    } catch (e) {
-      log(`Home 2–4: stopped at "${cmd}" — ${e.message}`);
-      break;
-    }
-    if (shouldAbortAutomation()) break;
-  }
-}
 
 async function syncAbsAndWait(targetsSix, maxSps, ramp, timeoutMs) {
   await sendLine(`syncabs ${targetsSix.join(' ')} ${maxSps} ${ramp}`);
@@ -811,7 +790,7 @@ async function goToVerticalPose() {
 
 /**
  * One-click lift calibration: pre-position Stage 2, home S1+S3+S4, park S3/S4, re-home S2,
- * park to preBouncePose, bounce-home S2 → lift 4500 → bounce-home S3, S4, S1 → vertical pose.
+ * park to preBouncePose, bounce-home S2 → lift 4500 → bounce-home S3, S4, S1, S5 → vertical pose → setpos 0.
  */
 async function runLiftAutohomeRoutine() {
   if (!linkReady || liftRoutineRunning) return;
@@ -828,12 +807,12 @@ async function runLiftAutohomeRoutine() {
   const pb = LIFT_ROUTINE.preBouncePose;
 
   try {
-    log('Lift routine: (1/13) refresh position…');
+    log('Lift routine: (1/14) refresh position…');
     await refreshPositionFromRobot(3000);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log(`Lift routine: (2/13) Stage 2 → C1=C4=${LIFT_ROUTINE.preHomeS2Steps} (syncabs)…`);
+    log(`Lift routine: (2/14) Stage 2 → C1=C4=${LIFT_ROUTINE.preHomeS2Steps} (syncabs)…`);
     const pre = [...currentPos];
     pre[0] = LIFT_ROUTINE.preHomeS2Steps;
     pre[3] = LIFT_ROUTINE.preHomeS2Steps;
@@ -841,7 +820,7 @@ async function runLiftAutohomeRoutine() {
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (3/13) home s1, home s3, home s4 (sequential, all zeros updated)…');
+    log('Lift routine: (3/14) home s1, home s3, home s4 (sequential, all zeros updated)…');
     for (const h of ['home s1', 'home s3', 'home s4']) {
       if (shouldAbortAutomation()) throw new Error('Cancelled');
       await homeStageAndWait(h, HOME_CMD_TIMEOUT_MS);
@@ -850,7 +829,7 @@ async function runLiftAutohomeRoutine() {
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
     log(
-      `Lift routine: (4/13) syncabs C2=${LIFT_ROUTINE.postHomeC2} C3=${LIFT_ROUTINE.postHomeC3} (simultaneous vs new zero)…`,
+      `Lift routine: (4/14) syncabs C2=${LIFT_ROUTINE.postHomeC2} C3=${LIFT_ROUTINE.postHomeC3} (simultaneous vs new zero)…`,
     );
     const park = [...currentPos];
     park[1] = LIFT_ROUTINE.postHomeC2;
@@ -859,23 +838,23 @@ async function runLiftAutohomeRoutine() {
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (5/13) home s2 (re-zero lift)…');
+    log('Lift routine: (5/14) home s2 (re-zero lift)…');
     await homeStageAndWait('home s2', HOME_CMD_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log(`Lift routine: (6/13) syncabs pre-bounce pose [${pb.join(', ')}]…`);
+    log(`Lift routine: (6/14) syncabs pre-bounce pose [${pb.join(', ')}]…`);
     await syncAbsAndWait([...pb], maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (7/13) home s2 bounce…');
+    log('Lift routine: (7/14) home s2 bounce…');
     await homeStageAndWait('home s2 bounce', HOME_CMD_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
     log(
-      `Lift routine: (8/13) Stage 2 up → C1=C4=${LIFT_ROUTINE.bounceLiftHeightSteps} (syncabs)…`,
+      `Lift routine: (8/14) Stage 2 up → C1=C4=${LIFT_ROUTINE.bounceLiftHeightSteps} (syncabs)…`,
     );
     const liftUp = [...currentPos];
     liftUp[0] = LIFT_ROUTINE.bounceLiftHeightSteps;
@@ -884,33 +863,123 @@ async function runLiftAutohomeRoutine() {
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (9/13) home s3 bounce…');
+    log('Lift routine: (9/14) home s3 bounce…');
     await homeStageAndWait('home s3 bounce', HOME_CMD_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (10/13) home s4 bounce…');
+    log('Lift routine: (10/14) home s4 bounce…');
     await homeStageAndWait('home s4 bounce', HOME_CMD_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (11/13) home s1 bounce…');
+    log('Lift routine: (11/14) home s1 bounce…');
     await homeStageAndWait('home s1 bounce', HOME_CMD_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log(`Lift routine: (12/13) syncabs vertical [${pb.join(', ')}]…`);
+    log('Lift routine: (12/14) home s5 bounce…');
+    await homeStageAndWait('home s5 bounce', HOME_CMD_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(`Lift routine: (13/14) syncabs vertical [${pb.join(', ')}]…`);
     await syncAbsAndWait([...VERTICAL_POSE], maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    log('Lift routine: (13/13) set tracked origin at vertical (setpos 0…0)…');
+    log('Lift routine: (14/14) set tracked origin at vertical (setpos 0…0)…');
     await zeroTrackedAtCurrentPose(10000);
 
     log('Lift routine: complete.');
   } catch (e) {
     log(`Lift routine error: ${e.message}`);
     alert(`Lift autohome routine failed:\n${e.message}`);
+  } finally {
+    liftRoutineRunning = false;
+    updateEStopUI();
+  }
+}
+
+/**
+ * Limit autohome: single bounce pass for all stages, no vertical pose, no re-zero.
+ * Pre-position S2 → bounce-home S1, S3, S4 → park S3/S4 → bounce-home S2 → bounce-home S5.
+ */
+async function runLimitAutohomeRoutine() {
+  if (!linkReady || liftRoutineRunning) return;
+  if (estopLatchedUI) {
+    alert('Clear ESTOP before running the limit autohome.');
+    return;
+  }
+  liftRoutineRunning = true;
+  stopRequested = false;
+  updateEStopUI();
+
+  const maxSps = Math.max(10, parseInt(els.jogMaxSps.value || '1200', 10));
+  const ramp = Math.max(1, parseInt(els.jogRamp.value || '150', 10));
+
+  try {
+    log('Limit autohome: (1/9) refresh position…');
+    await refreshPositionFromRobot(3000);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(`Limit autohome: (2/9) Stage 2 → C1=C4=${LIFT_ROUTINE.preHomeS2Steps} (syncabs)…`);
+    const pre = [...currentPos];
+    pre[0] = LIFT_ROUTINE.preHomeS2Steps;
+    pre[3] = LIFT_ROUTINE.preHomeS2Steps;
+    await syncAbsAndWait(pre, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Limit autohome: (3/9) home s1 bounce…');
+    await homeStageAndWait('home s1 bounce', HOME_CMD_TIMEOUT_MS);
+    log(`  → pos after S1: [${currentPos.join(', ')}]`);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Limit autohome: (4/9) home s3 bounce…');
+    await homeStageAndWait('home s3 bounce', HOME_CMD_TIMEOUT_MS);
+    log(`  → pos after S3: [${currentPos.join(', ')}]`);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Limit autohome: (5/9) home s4 bounce…');
+    await homeStageAndWait('home s4 bounce', HOME_CMD_TIMEOUT_MS);
+    log(`  → pos after S4: [${currentPos.join(', ')}]`);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log(
+      `Limit autohome: (6/9) park S3/S4 → C2=${LIFT_ROUTINE.postHomeC2} C3=${LIFT_ROUTINE.postHomeC3} (syncabs)…`,
+    );
+    const park = [...currentPos];
+    park[1] = LIFT_ROUTINE.postHomeC2;
+    park[2] = LIFT_ROUTINE.postHomeC3;
+    await syncAbsAndWait(park, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Limit autohome: (7/9) home s2 bounce…');
+    await homeStageAndWait('home s2 bounce', HOME_CMD_TIMEOUT_MS);
+    log(`  → pos after S2: [${currentPos.join(', ')}]`);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    log('Limit autohome: (8/9) home s5 bounce…');
+    await homeStageAndWait('home s5 bounce', HOME_CMD_TIMEOUT_MS);
+    log(`  → pos after S5: [${currentPos.join(', ')}]`);
+
+    if (shouldAbortAutomation()) throw new Error('Cancelled');
+
+    const limitEndPose = [3400, -6000, -3200, 3400, 0, -3150];
+    log(`Limit autohome: (9/9) syncabs to [${limitEndPose.join(', ')}]…`);
+    await syncAbsAndWait(limitEndPose, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+
+    log('Limit autohome: complete.');
+  } catch (e) {
+    log(`Limit autohome error: ${e.message}`);
+    alert(`Limit autohome routine failed:\n${e.message}`);
   } finally {
     liftRoutineRunning = false;
     updateEStopUI();
@@ -1181,7 +1250,7 @@ function wireEvents() {
   els.disconnectBtn.onclick = disconnectTransport;
   els.refreshPosBtn.onclick = requestWhere;
   els.zeroAllBtn.onclick = zeroAll;
-  els.home234Btn.onclick = home234;
+  if (els.limitAutohomeBtn) els.limitAutohomeBtn.onclick = () => runLimitAutohomeRoutine();
   if (els.liftAutohomeBtn) els.liftAutohomeBtn.onclick = () => runLiftAutohomeRoutine();
   if (els.goToVerticalBtn) {
     els.goToVerticalBtn.onclick = async () => {

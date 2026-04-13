@@ -976,6 +976,16 @@ void applyPositionState(long p[NUM_DRIVERS]) {
 
 static const int HOME_CHUNK_STEPS = 40;
 static const long HOME_MAX_SEEK_STEPS = 250000L;
+static const unsigned long HOME_TIMEOUT_MS = 20000;
+static unsigned long homeDeadlineMs = 0;
+
+static bool homeTimedOut() {
+  return millis() > homeDeadlineMs;
+}
+
+static void homeStartTimer() {
+  homeDeadlineMs = millis() + HOME_TIMEOUT_MS;
+}
 // Bounce homing (`home sN bounce`): fast approach, back off, slow final creep, then zero.
 static const int HOME_BOUNCE_BACKOFF_STEPS = 260;
 static const int HOME_BOUNCE_SLOW_CHUNK = 8;
@@ -997,6 +1007,11 @@ static int homeS1BounceSlowPulseUs(int saved) {
 // Stage 5 Hall seek: slower pulse + smaller chunks (does not change global `speed` / manual jog).
 static const int HOME_S5_CHUNK_STEPS = 24;
 static const int HOME_S5_PULSE_DELAY_US = 2400;
+static const int HOME_S5_BOUNCE_BACKOFF_STEPS = 100;
+static const int HOME_S5_BOUNCE_SLOW_CHUNK = 4;
+static int homeS5BounceSlowPulseUs(int saved) {
+  return min(max(saved * 5, saved + 1200), 16000);
+}
 
 // Seek toward limit only (no zero). Caller sets `pulseDelayUs`; restored by bounce callers.
 static bool homeStage1SeekCWNoZero(int chunkSteps) {
@@ -1005,6 +1020,7 @@ static bool homeStage1SeekCWNoZero(int chunkSteps) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S1: timed out"); return false; }
     if (stage1CWLimitHit) return true;
     long chunk = chunkSteps;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
@@ -1026,6 +1042,7 @@ static bool homeStage2SeekDownNoZero(int chunkSteps) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S2: timed out"); return false; }
     if (stage2LimitHit) return true;
     long chunk = chunkSteps;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
@@ -1047,6 +1064,7 @@ static bool homeStage3SeekDownNoZero(int chunkSteps) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S3: timed out"); return false; }
     if (stage3LimitHit) return true;
     long chunk = chunkSteps;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
@@ -1068,6 +1086,7 @@ static bool homeStage4SeekDownNoZero(int chunkSteps) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S4: timed out"); return false; }
     if (stage4LimitHit) return true;
     long chunk = chunkSteps;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = (int)(HOME_MAX_SEEK_STEPS - moved);
@@ -1084,6 +1103,7 @@ static bool homeStage4SeekDownNoZero(int chunkSteps) {
 }
 
 bool homeStage1ToLimit() {
+  homeStartTimer();
   if (estopLatched) return false;
   const int savedPulse = pulseDelayUs;
   pulseDelayUs = homeS1StraightHomingPulseUs(savedPulse);
@@ -1091,6 +1111,7 @@ bool homeStage1ToLimit() {
   while (moved < HOME_MAX_SEEK_STEPS) {
     pollEmergencyInputs();
     serviceSensorUART();
+    if (homeTimedOut()) { printlnDebug("HOME S1: timed out"); pulseDelayUs = savedPulse; return false; }
     if (estopLatched) {
       pulseDelayUs = savedPulse;
       return false;
@@ -1121,11 +1142,13 @@ bool homeStage1ToLimit() {
 }
 
 bool homeStage2ToLimit() {
+  homeStartTimer();
   long moved = 0;
   while (moved < HOME_MAX_SEEK_STEPS) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S2: timed out"); return false; }
     if (stage2LimitHit) break;
     long chunk = HOME_CHUNK_STEPS;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
@@ -1152,11 +1175,13 @@ bool homeStage2ToLimit() {
 }
 
 bool homeStage3ToLimit() {
+  homeStartTimer();
   long moved = 0;
   while (moved < HOME_MAX_SEEK_STEPS) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S3: timed out"); return false; }
     if (stage3LimitHit) break;
     long chunk = HOME_CHUNK_STEPS;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
@@ -1182,11 +1207,13 @@ bool homeStage3ToLimit() {
 }
 
 bool homeStage4ToLimit() {
+  homeStartTimer();
   long moved = 0;
   while (moved < HOME_MAX_SEEK_STEPS) {
     pollEmergencyInputs();
     serviceSensorUART();
     if (estopLatched) return false;
+    if (homeTimedOut()) { printlnDebug("HOME S4: timed out"); return false; }
     if (stage4LimitHit) break;
     long chunk = HOME_CHUNK_STEPS;
     if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
@@ -1212,6 +1239,7 @@ bool homeStage4ToLimit() {
 }
 
 bool homeStage1ToLimitBounce() {
+  homeStartTimer();
   if (estopLatched) return false;
   const int saved = pulseDelayUs;
   pulseDelayUs = homeS1BounceFastPulseUs(saved);
@@ -1242,6 +1270,7 @@ bool homeStage1ToLimitBounce() {
 }
 
 bool homeStage2ToLimitBounce() {
+  homeStartTimer();
   if (estopLatched) return false;
   const int saved = pulseDelayUs;
   pulseDelayUs = max(100, saved / 2);
@@ -1273,6 +1302,7 @@ bool homeStage2ToLimitBounce() {
 }
 
 bool homeStage3ToLimitBounce() {
+  homeStartTimer();
   if (estopLatched) return false;
   const int saved = pulseDelayUs;
   pulseDelayUs = max(100, saved / 2);
@@ -1303,6 +1333,7 @@ bool homeStage3ToLimitBounce() {
 }
 
 bool homeStage4ToLimitBounce() {
+  homeStartTimer();
   if (estopLatched) return false;
   const int saved = pulseDelayUs;
   pulseDelayUs = max(100, saved / 2);
@@ -1333,6 +1364,7 @@ bool homeStage4ToLimitBounce() {
 }
 
 bool homeStage5ToHall() {
+  homeStartTimer();
   serviceSensorUART();
   if (estopLatched) return false;
 
@@ -1358,6 +1390,11 @@ bool homeStage5ToHall() {
         pulseDelayUs = savedPulse;
         return false;
       }
+      if (homeTimedOut()) {
+        printlnDebug("HOME S5: timed out");
+        pulseDelayUs = savedPulse;
+        return false;
+      }
       if (stage5HallAtZero) {
         long p[NUM_DRIVERS];
         for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
@@ -1380,6 +1417,75 @@ bool homeStage5ToHall() {
   pulseDelayUs = savedPulse;
   printlnDebug("HOME S5: hall not found (check S5H / HW-477 / magnet; try home s5 from other side)");
   return false;
+}
+
+// Seek Hall without zeroing. Sets `foundDir` to the direction that reached the Hall.
+static bool homeStage5SeekHallNoZero(int chunkSteps, bool &foundDir) {
+  const bool dirs[2] = { true, false };
+  for (int d = 0; d < 2; d++) {
+    long moved = 0;
+    while (moved < HOME_MAX_SEEK_STEPS) {
+      pollEmergencyInputs();
+      serviceSensorUART();
+      if (estopLatched) return false;
+      if (homeTimedOut()) { printlnDebug("HOME S5: timed out"); return false; }
+      if (stage5HallAtZero) {
+        foundDir = dirs[d];
+        return true;
+      }
+      long chunk = chunkSteps;
+      if (moved + chunk > HOME_MAX_SEEK_STEPS) chunk = HOME_MAX_SEEK_STEPS - moved;
+      if (chunk <= 0) break;
+      if (!stepMotor(STAGE5, dirs[d], (int)chunk)) return false;
+      moved += chunk;
+    }
+  }
+  return false;
+}
+
+bool homeStage5ToHallBounce() {
+  homeStartTimer();
+  serviceSensorUART();
+  if (estopLatched) return false;
+
+  const int saved = pulseDelayUs;
+  pulseDelayUs = HOME_S5_PULSE_DELAY_US;
+
+  bool seekDir = true;
+  if (!homeStage5SeekHallNoZero(HOME_S5_CHUNK_STEPS, seekDir)) {
+    pulseDelayUs = saved;
+    printlnDebug("HOME S5 bounce: hall not found during fast seek");
+    return false;
+  }
+
+  pulseDelayUs = saved;
+  if (estopLatched) return false;
+
+  // Back off away from the Hall zone
+  bool backoffDir = !seekDir;
+  if (!stepMotor(STAGE5, backoffDir, HOME_S5_BOUNCE_BACKOFF_STEPS)) return false;
+  serviceSensorUART();
+
+  // Slow creep back toward the Hall
+  pulseDelayUs = homeS5BounceSlowPulseUs(saved);
+  if (!homeStage5SeekHallNoZero(HOME_S5_BOUNCE_SLOW_CHUNK, seekDir)) {
+    pulseDelayUs = saved;
+    printlnDebug("HOME S5 bounce: hall not found during slow creep");
+    return false;
+  }
+  pulseDelayUs = saved;
+
+  if (!stage5HallAtZero) {
+    printlnDebug("HOME S5 bounce: hall not confirmed");
+    return false;
+  }
+
+  long p[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
+  p[STAGE5] = 0;
+  applyPositionState(p);
+  printlnDebug("HOME S5: zero at hall (bounce)");
+  return true;
 }
 
 // --- App parity: VERTICAL_POSE / LIFT_ROUTINE in app.js (keep numbers in sync). ---
@@ -1512,7 +1618,7 @@ void printHelp() {
   printlnBoth("  setpos p1 p2 p3 p4 p5 p6 -> overwrite tracked positions");
   printlnBoth("  home s1       -> jog C6 + (c6f/s1cw) to S1 limit, then C6=0");
   printlnBoth("  home s2..s4   -> drive to limit switches, then zero those axes");
-  printlnBoth("  home sN bounce -> s1-s4 only: fast seek, back off, slow creep, then zero");
+  printlnBoth("  home sN bounce -> fast seek, back off, slow creep, then zero");
   printlnBoth("  home s5       -> find Hall zero (S5H), then zero C5");
   printlnBoth("  estop         -> latch emergency stop (blocks all motion)");
   printlnBoth("  estop clear   -> clear e-stop latch");
@@ -1625,11 +1731,7 @@ void handleCommand(String cmd) {
     } else if (h == "s4") {
       ok = bounce ? homeStage4ToLimitBounce() : homeStage4ToLimit();
     } else if (h == "s5") {
-      if (bounce) {
-        sendERR(cmd, "s5 bounce not supported (use home s5)");
-        return;
-      }
-      ok = homeStage5ToHall();
+      ok = bounce ? homeStage5ToHallBounce() : homeStage5ToHall();
     } else {
       sendERR(cmd, "unknown stage");
       return;

@@ -50,6 +50,7 @@ bool lastStage2 = false;
 bool lastStage3 = false;
 bool lastStage4 = false;
 bool lastStage5Hall = false;
+bool stage5HallStable = false;
 bool stage5HallRaw = false;
 unsigned long stage5HallRawChangeMs = 0;
 const unsigned long S5_HALL_DEBOUNCE_MS = 25;
@@ -118,11 +119,11 @@ bool readStage5HallAtZero() {
     stage5HallRawChangeMs = millis();
   }
 
-  if ((millis() - stage5HallRawChangeMs) >= S5_HALL_DEBOUNCE_MS && lastStage5Hall != stage5HallRaw) {
-    lastStage5Hall = stage5HallRaw;
+  if ((millis() - stage5HallRawChangeMs) >= S5_HALL_DEBOUNCE_MS && stage5HallStable != stage5HallRaw) {
+    stage5HallStable = stage5HallRaw;
   }
 
-  return lastStage5Hall;
+  return stage5HallStable;
 }
 
 void sendLimitStatus() {
@@ -232,8 +233,10 @@ void setup() {
   debS4.pendingRaw = ir4;
   debS4.stable = ir4;
   debS4.changeMs = millis();
-  lastStage5Hall = readStage5HallAtZeroRaw();
-  stage5HallRaw = lastStage5Hall;
+  bool initS5h = readStage5HallAtZeroRaw();
+  lastStage5Hall = initS5h;
+  stage5HallStable = initS5h;
+  stage5HallRaw = initS5h;
   stage5HallRawChangeMs = millis();
 
   Serial.println(String("Sensor board ready (S1–S4 mech debounce ") + LIMIT_MECH_DEBOUNCE_MS +
