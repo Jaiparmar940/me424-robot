@@ -122,6 +122,18 @@
         </label>
         <button id="addMosfetBtn" disabled>Add MOSFET Action</button>
       </div>
+      <div class="row wrap">
+        <label>Limit bounce home
+          <select id="homeBounceAction">
+            <option value="home s1 bounce">S1 (turntable)</option>
+            <option value="home s2 bounce">S2 (lift pair)</option>
+            <option value="home s3 bounce">S3</option>
+            <option value="home s4 bounce">S4</option>
+            <option value="home s5 bounce">S5 (Hall)</option>
+          </select>
+        </label>
+        <button id="addHomeBounceBtn" disabled>Add bounce home</button>
+      </div>
     </section>
 
     <section class="card">
@@ -136,7 +148,7 @@
         <button id="runSequenceBtn" disabled>Run Sequence</button>
         <button id="stopSequenceBtn" disabled>Stop (soft)</button>
       </div>
-      <p class="hint">Pose-to-pose motion uses firmware command: <code>syncabs t1 t2 t3 t4 t5 t6 maxSps rampSteps</code>.</p>
+      <p class="hint">Pose-to-pose motion uses <code>syncabs … maxSps rampSteps</code>. Each saved pose can set its own maxSps/ramp (Edit), or leave fields empty to follow the Playback values above. New poses snapshot the current Playback numbers when recorded.</p>
     </section>
 
     <section class="card">

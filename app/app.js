@@ -313,6 +313,8 @@ const els = {
   addDelayBtn: document.getElementById('addDelayBtn'),
   mosfetAction: document.getElementById('mosfetAction'),
   addMosfetBtn: document.getElementById('addMosfetBtn'),
+  homeBounceAction: document.getElementById('homeBounceAction'),
+  addHomeBounceBtn: document.getElementById('addHomeBounceBtn'),
   playbackMaxSps: document.getElementById('playbackMaxSps'),
   playbackRamp: document.getElementById('playbackRamp'),
   runSequenceBtn: document.getElementById('runSequenceBtn'),
@@ -396,6 +398,7 @@ function setConnectedUI(connected) {
   if (els.goToVerticalBtn) els.goToVerticalBtn.disabled = !connected;
   els.recordPoseBtn.disabled = !connected;
   els.addDelayBtn.disabled = !connected;
+  if (els.addHomeBounceBtn) els.addHomeBounceBtn.disabled = !connected;
   els.addMosfetBtn.disabled = !connected;
   els.runSequenceBtn.disabled = !connected;
   els.sendCmdBtn.disabled = !connected;
@@ -973,8 +976,11 @@ async function runLimitAutohomeRoutine() {
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
     const limitEndPose = [3400, -6000, -3200, 3400, 0, -3150];
-    log(`Limit autohome: (9/9) syncabs to [${limitEndPose.join(', ')}]…`);
-    await syncAbsAndWait(limitEndPose, maxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+    const endMaxSps = Math.max(10, Math.floor(maxSps / 2));
+    log(
+      `Limit autohome: (9/9) syncabs to [${limitEndPose.join(', ')}] (half speed: maxSps=${endMaxSps})…`,
+    );
+    await syncAbsAndWait(limitEndPose, endMaxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
 
     log('Limit autohome: complete.');
   } catch (e) {
@@ -991,6 +997,30 @@ function addSequenceItem(item) {
   renderSequence();
 }
 
+/** Effective syncabs speed/ramp for a pose step (per-step or playback panel). */
+function resolvePoseMotion(item) {
+  const gMax = Math.max(10, parseInt(els.playbackMaxSps.value || '1000', 10));
+  const gRamp = Math.max(1, parseInt(els.playbackRamp.value || '200', 10));
+  return {
+    maxSps:
+      typeof item.maxSps === 'number' && !Number.isNaN(item.maxSps) && item.maxSps >= 10
+        ? item.maxSps
+        : gMax,
+    ramp:
+      typeof item.ramp === 'number' && !Number.isNaN(item.ramp) && item.ramp >= 1
+        ? item.ramp
+        : gRamp,
+  };
+}
+
+function poseMotionSourceLabel(item) {
+  const hasSps = typeof item.maxSps === 'number' && !Number.isNaN(item.maxSps) && item.maxSps >= 10;
+  const hasRamp = typeof item.ramp === 'number' && !Number.isNaN(item.ramp) && item.ramp >= 1;
+  if (hasSps && hasRamp) return '';
+  if (!hasSps && !hasRamp) return ' (playback)';
+  return ' (mixed: unset uses playback)';
+}
+
 function renderSequence() {
   els.sequenceList.innerHTML = '';
   sequence.forEach((item, i) => {
@@ -1001,11 +1031,16 @@ function renderSequence() {
     txt.className = 'seq-text';
 
     if (item.type === 'pose') {
-      txt.textContent = `#${i} POSE [${item.pos.join(', ')}]`;
+      const m = resolvePoseMotion(item);
+      txt.textContent = `#${i} POSE [${item.pos.join(', ')}] @ ${m.maxSps} sps, ramp ${m.ramp}${poseMotionSourceLabel(item)}`;
     } else if (item.type === 'delay') {
       txt.textContent = `#${i} DELAY ${item.ms}ms`;
     } else if (item.type === 'mosfet') {
       txt.textContent = `#${i} MOSFET ${item.cmd}`;
+    } else if (item.type === 'home') {
+      txt.textContent = `#${i} HOME ${item.cmd}`;
+    } else {
+      txt.textContent = `#${i} ${JSON.stringify(item)}`;
     }
 
     const actions = document.createElement('span');
@@ -1027,8 +1062,8 @@ function renderSequence() {
 
     const goBtn = document.createElement('button');
     goBtn.textContent = 'Go';
-    goBtn.disabled = item.type !== 'pose' || !linkReady;
-    goBtn.onclick = () => goToSequencePose(i);
+    goBtn.disabled = (item.type !== 'pose' && item.type !== 'home') || !linkReady;
+    goBtn.onclick = () => runSingleSequenceItem(i);
 
     const delBtn = document.createElement('button');
     delBtn.textContent = 'Delete';
@@ -1086,21 +1121,51 @@ function editSequenceItem(index) {
   }
 
   if (item.type === 'pose') {
-    const val = prompt('Pose (6 comma-separated positions):', item.pos.join(','));
+    const ms = typeof item.maxSps === 'number' && item.maxSps >= 10 ? String(item.maxSps) : '';
+    const rm = typeof item.ramp === 'number' && item.ramp >= 1 ? String(item.ramp) : '';
+    const defaultLine = `${item.pos.join(',')} | ${ms} | ${rm}`;
+    const hint =
+      '6 positions, then optional " | maxSps | ramp" (each optional; empty = use playback for that field).';
+    const val = prompt(`${hint}\nExample: 0,0,0,0,0,0 | 800 | 150`, defaultLine);
     if (val === null) return;
-    const parts = val.split(',').map((s) => parseInt(s.trim(), 10));
-    if (parts.length !== 6 || parts.some((n) => Number.isNaN(n))) {
-      return alert('Invalid pose. Use exactly 6 integers.');
+    const segs = val.split('|').map((s) => s.trim());
+    const poseParts = segs[0].split(',').map((s) => parseInt(s.trim(), 10));
+    if (poseParts.length !== 6 || poseParts.some((n) => Number.isNaN(n))) {
+      return alert('Invalid pose. First segment must be exactly 6 integers.');
     }
-    item.pos = parts;
+    item.pos = poseParts;
+    if (segs.length >= 2 && segs[1] !== '') {
+      const ms = parseInt(segs[1], 10);
+      if (Number.isNaN(ms) || ms < 10) return alert('maxSps must be an integer ≥ 10.');
+      item.maxSps = ms;
+    } else {
+      delete item.maxSps;
+    }
+    if (segs.length >= 3 && segs[2] !== '') {
+      const rm = parseInt(segs[2], 10);
+      if (Number.isNaN(rm) || rm < 1) return alert('ramp must be an integer ≥ 1.');
+      item.ramp = rm;
+    } else {
+      delete item.ramp;
+    }
+    renderSequence();
+  }
+
+  if (item.type === 'home') {
+    const val = prompt('Bounce home command (e.g. home s3 bounce):', item.cmd);
+    if (val === null) return;
+    const cmd = val.trim().toLowerCase();
+    if (!/^home s[1-5] bounce$/.test(cmd)) {
+      return alert('Use: home s1 bounce … home s5 bounce');
+    }
+    item.cmd = cmd;
     renderSequence();
   }
 }
 
-async function goToSequencePose(index) {
+async function runSingleSequenceItem(index) {
   const item = sequence[index];
-  if (!item || item.type !== 'pose') return;
-  if (!linkReady) {
+  if (!item || !linkReady) {
     alert('Connect to the controller first.');
     return;
   }
@@ -1109,27 +1174,32 @@ async function goToSequencePose(index) {
     return;
   }
 
-  const maxSps = Math.max(10, parseInt(els.playbackMaxSps.value || '1000', 10));
-  const ramp = Math.max(1, parseInt(els.playbackRamp.value || '200', 10));
-
   try {
-    await sendLine(`syncabs ${item.pos.join(' ')} ${maxSps} ${ramp}`);
-    const r = await waitForFirmwareCompletion('syncabs', 300000);
-    if (!r.ok) throw new Error(r.line);
-    await refreshPositionFromRobot(300000);
+    if (item.type === 'pose') {
+      const { maxSps, ramp } = resolvePoseMotion(item);
+      await sendLine(`syncabs ${item.pos.join(' ')} ${maxSps} ${ramp}`);
+      const r = await waitForFirmwareCompletion('syncabs', 300000);
+      if (!r.ok) throw new Error(r.line);
+      await refreshPositionFromRobot(300000);
+    } else if (item.type === 'home') {
+      log(`Sequence step: ${item.cmd}`);
+      await homeStageAndWait(item.cmd, HOME_CMD_TIMEOUT_MS);
+    }
   } catch (e) {
-    log(`Go-to-pose error: ${e.message}`);
+    log(`Sequence step error: ${e.message}`);
   }
 }
 
 async function recordPose() {
   await requestWhere();
+  const maxSps = Math.max(10, parseInt(els.playbackMaxSps.value || '1000', 10));
+  const ramp = Math.max(1, parseInt(els.playbackRamp.value || '200', 10));
   try {
     const fresh = await waitForNextPositionUpdate();
-    addSequenceItem({ type: 'pose', pos: [...fresh] });
+    addSequenceItem({ type: 'pose', pos: [...fresh], maxSps, ramp });
   } catch (e) {
     log(`Record pose fallback: ${e.message}`);
-    addSequenceItem({ type: 'pose', pos: [...currentPos] });
+    addSequenceItem({ type: 'pose', pos: [...currentPos], maxSps, ramp });
   }
 }
 
@@ -1140,6 +1210,13 @@ function addDelay() {
 
 function addMosfet() {
   addSequenceItem({ type: 'mosfet', cmd: els.mosfetAction.value });
+}
+
+function addHomeBounceToSequence() {
+  const sel = els.homeBounceAction;
+  const cmd = (sel && sel.value ? sel.value : '').trim().toLowerCase();
+  if (!/^home s[1-5] bounce$/.test(cmd)) return;
+  addSequenceItem({ type: 'home', cmd });
 }
 
 async function runSequence() {
@@ -1158,14 +1235,12 @@ async function runSequence() {
   els.stopSequenceBtn.disabled = false;
   els.runSequenceBtn.disabled = true;
 
-  const maxSps = Math.max(10, parseInt(els.playbackMaxSps.value || '1000', 10));
-  const ramp = Math.max(1, parseInt(els.playbackRamp.value || '200', 10));
-
   try {
     for (const item of sequence) {
       if (shouldAbortAutomation()) break;
 
       if (item.type === 'pose') {
+        const { maxSps, ramp } = resolvePoseMotion(item);
         await sendLine(`syncabs ${item.pos.join(' ')} ${maxSps} ${ramp}`);
         const r = await waitForFirmwareCompletion('syncabs', 300000);
         if (!r.ok) throw new Error(r.line);
@@ -1175,6 +1250,9 @@ async function runSequence() {
       } else if (item.type === 'mosfet') {
         applyMosfetOptimistic(item.cmd);
         await sendLine(item.cmd);
+      } else if (item.type === 'home') {
+        log(`Run sequence: ${item.cmd}`);
+        await homeStageAndWait(item.cmd, HOME_CMD_TIMEOUT_MS);
       }
     }
   } catch (e) {
@@ -1265,6 +1343,7 @@ function wireEvents() {
   els.recordPoseBtn.onclick = recordPose;
   els.addDelayBtn.onclick = addDelay;
   els.addMosfetBtn.onclick = addMosfet;
+  if (els.addHomeBounceBtn) els.addHomeBounceBtn.onclick = addHomeBounceToSequence;
   els.runSequenceBtn.onclick = runSequence;
   els.stopSequenceBtn.onclick = stopSequence;
   if (els.estopBtn) {

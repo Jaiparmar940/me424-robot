@@ -1363,17 +1363,28 @@ bool homeStage4ToLimitBounce() {
   return true;
 }
 
+// Before S5 Hall seek: jog 250 steps in the direction that decreases C5 count (same sense as c5r),
+// so we leave the Hall window and can re-acquire reliably.
+static const int HOME_S5_PRE_JOG_STEPS = 250;
+static bool homeStage5PreJogBeforeSeek() {
+  if (estopLatched) return false;
+  if (!stepMotor(STAGE5, false, HOME_S5_PRE_JOG_STEPS)) return false;
+  serviceSensorUART();
+  return true;
+}
+
 bool homeStage5ToHall() {
   homeStartTimer();
   serviceSensorUART();
   if (estopLatched) return false;
+  if (!homeStage5PreJogBeforeSeek()) return false;
 
   if (stage5HallAtZero) {
     long p[NUM_DRIVERS];
     for (int i = 0; i < NUM_DRIVERS; i++) p[i] = currentPos[i];
     p[STAGE5] = 0;
     applyPositionState(p);
-    printlnDebug("HOME S5: already at hall, C5=0");
+    printlnDebug("HOME S5: at hall after pre-jog, C5=0");
     return true;
   }
 
@@ -1447,6 +1458,7 @@ bool homeStage5ToHallBounce() {
   homeStartTimer();
   serviceSensorUART();
   if (estopLatched) return false;
+  if (!homeStage5PreJogBeforeSeek()) return false;
 
   const int saved = pulseDelayUs;
   pulseDelayUs = HOME_S5_PULSE_DELAY_US;
