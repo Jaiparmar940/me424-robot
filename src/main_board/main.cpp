@@ -8,7 +8,7 @@
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 
-// Version 12.4
+// Version 12.5
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "surgical_clanker2.4"
@@ -2243,6 +2243,20 @@ void setup() {
 
     if (WiFi.status() == WL_CONNECTED) {
       ArduinoOTA.setHostname(WIFI_HOSTNAME);
+      // Filesystem OTA must not write LittleFS while it is mounted (HTTP/WS serve from it).
+      ArduinoOTA.onStart([]() {
+        if (ArduinoOTA.getCommand() != U_SPIFFS) return;
+        printlnBoth("OTA: LittleFS update — closing HTTP/WebSocket and unmounting FS");
+        if (httpServerLive) {
+          httpServer.close();
+          httpServerLive = false;
+        }
+        if (webSocketLive) {
+          webSocket.close();
+          webSocketLive = false;
+        }
+        LittleFS.end();
+      });
       ArduinoOTA.begin();
       CommandServer.begin();
       Serial.println("WiFi connected: " + WiFi.localIP().toString());
