@@ -21,12 +21,10 @@ const int UART_TX_PIN = 26;   // Slave TX to Main RX2
 const long UART_BAUD = 115200;
 
 // MAG/VAC: digital outputs into your MOSFET switching stages (magnet, vacuum).
-// SAW_POWER (D23): enable / power path (e.g. MOSFET or relay) for the saw supply.
 // SAW_BLDC_PWM (D22): logic/PWM into an external **BLDC driver module** (ESC / driver IC input) —
 //                      not a bare high‑current MOSFET leg like 18/19; the driver handles the motor phases.
 const int MAG_PIN = 18;
 const int VAC_PIN = 19;
-const int SAW_POWER_PIN = 23;
 const int SAW_BLDC_PWM_PIN = 22;
 const int SAW_BLDC_PWM_CHANNEL = 0;
 const int SAW_BLDC_PWM_FREQ_HZ = 5000;
@@ -50,21 +48,102 @@ bool magState = false;
 bool vacState = false;
 bool sawState = false;
 uint8_t sawSpeedPercent = 0;
+bool sawBldcPwmAttached = false;
+
+void readToolId(float &rOut, int &idOut);
+float readCompressionMm();
 
 static void sawBldcPwmInit() {
   ledcSetup(SAW_BLDC_PWM_CHANNEL, SAW_BLDC_PWM_FREQ_HZ, SAW_BLDC_PWM_BITS);
+  pinMode(SAW_BLDC_PWM_PIN, OUTPUT);
+  digitalWrite(SAW_BLDC_PWM_PIN, LOW);
+}
+
+static void sawBldcEnsureAttached() {
+  if (sawBldcPwmAttached) return;
   ledcAttachPin(SAW_BLDC_PWM_PIN, SAW_BLDC_PWM_CHANNEL);
-  ledcWrite(SAW_BLDC_PWM_CHANNEL, 0);
+  sawBldcPwmAttached = true;
+}
+
+static void sawBldcForceLow() {
+  if (sawBldcPwmAttached) {
+    ledcWrite(SAW_BLDC_PWM_CHANNEL, 0);
+    ledcDetachPin(SAW_BLDC_PWM_PIN);
+    sawBldcPwmAttached = false;
+  }
+  pinMode(SAW_BLDC_PWM_PIN, OUTPUT);
+  digitalWrite(SAW_BLDC_PWM_PIN, LOW);
+}
+
+static void sawBldcApplyDuty(uint32_t duty) {
+  sawBldcEnsureAttached();
+  ledcWrite(SAW_BLDC_PWM_CHANNEL, duty);
+}
+
+static uint32_t sawSpeedDuty() {
+  uint32_t duty = (uint32_t)sawSpeedPercent * 255U / 100U;
+  if (duty > 255U) duty = 255U;
+  return duty;
 }
 
 static void sawBldcPwmApply() {
   if (!sawState) {
-    ledcWrite(SAW_BLDC_PWM_CHANNEL, 0);
+    sawBldcForceLow();
     return;
   }
-  uint32_t duty = (uint32_t)sawSpeedPercent * 255U / 100U;
-  if (duty > 255U) duty = 255U;
-  ledcWrite(SAW_BLDC_PWM_CHANNEL, duty);
+  const uint32_t duty = sawSpeedDuty();
+  if (duty == 0U) {
+    sawBldcForceLow();
+    return;
+  }
+  sawBldcApplyDuty(duty);
+}
+
+static void sawBldcPwmSetpointOnly() {
+  if (!sawState) return;
+  const uint32_t duty = sawSpeedDuty();
+  if (duty == 0U) {
+    sawBldcForceLow();
+    return;
+  }
+  sawBldcApplyDuty(duty);
+}
+
+void setMag(bool on) {
+  magState = on;
+  digitalWrite(MAG_PIN, on ? HIGH : LOW);
+}
+
+void setVac(bool on) {
+  vacState = on;
+  digitalWrite(VAC_PIN, on ? HIGH : LOW);
+}
+
+void setSaw(bool on) {
+  sawState = on;
+  sawBldcPwmApply();
+}
+
+void sendStatus() {
+  float rTool = 0;
+  int toolId = 0;
+  readToolId(rTool, toolId);
+  float compMm = readCompressionMm();
+
+  String msg = "STATUS MAG=" + String(magState ? "ON" : "OFF") +
+               " VAC=" + String(vacState ? "ON" : "OFF") +
+               " SAW=" + String(sawState ? "ON" : "OFF") +
+               " SAW_SPD=" + String((int)sawSpeedPercent) +
+               " TOOL_R=" + String(rTool, 0) +
+               " TOOL_ID=" + String(toolId) +
+               " COMP_MM=" + String(compMm, 2);
+  MainSerial.println(msg);
+  Serial.println(msg);
+}
+
+void sendAck(const String &msg) {
+  MainSerial.println(msg);
+  Serial.println(msg);
 }
 
 int readAdcAvg(int pin, int samples = 16) {
@@ -116,43 +195,6 @@ void readToolId(float &rOut, int &idOut) {
   idOut = classifyToolOhms(rOut);
 }
 
-void setMag(bool on) {
-  magState = on;
-  digitalWrite(MAG_PIN, on ? HIGH : LOW);
-}
-
-void setVac(bool on) {
-  vacState = on;
-  digitalWrite(VAC_PIN, on ? HIGH : LOW);
-}
-
-void setSaw(bool on) {
-  sawState = on;
-  digitalWrite(SAW_POWER_PIN, on ? HIGH : LOW);
-  sawBldcPwmApply();
-}
-
-void sendStatus() {
-  float rTool = 0;
-  int toolId = 0;
-  readToolId(rTool, toolId);
-  float compMm = readCompressionMm();
-
-  String msg = "STATUS MAG=" + String(magState ? "ON" : "OFF") +
-               " VAC=" + String(vacState ? "ON" : "OFF") +
-               " SAW=" + String(sawState ? "ON" : "OFF") +
-               " SAW_SPD=" + String((int)sawSpeedPercent) +
-               " TOOL_R=" + String(rTool, 0) +
-               " TOOL_ID=" + String(toolId) +
-               " COMP_MM=" + String(compMm, 2);
-  MainSerial.println(msg);
-  Serial.println(msg);
-}
-
-void sendAck(const String &msg) {
-  MainSerial.println(msg);
-  Serial.println(msg);
-}
 
 static void printIpToSerialAndMain() {
   String line;
@@ -217,7 +259,7 @@ void handleCommand(String cmd) {
     if (v < 0) v = 0;
     if (v > 100) v = 100;
     sawSpeedPercent = (uint8_t)v;
-    sawBldcPwmApply();
+    sawBldcPwmSetpointOnly();
     sendAck("ACK SAW SPEED " + String((int)sawSpeedPercent));
     return;
   }
@@ -241,15 +283,12 @@ void handleCommand(String cmd) {
 void setup() {
   pinMode(MAG_PIN, OUTPUT);
   pinMode(VAC_PIN, OUTPUT);
-  pinMode(SAW_POWER_PIN, OUTPUT);
 
   digitalWrite(MAG_PIN, LOW);
   digitalWrite(VAC_PIN, LOW);
-  digitalWrite(SAW_POWER_PIN, LOW);
 
   (void)ledcDetachPin(MAG_PIN);
   (void)ledcDetachPin(VAC_PIN);
-  (void)ledcDetachPin(SAW_POWER_PIN);
   (void)ledcDetachPin(SAW_BLDC_PWM_PIN);
   sawBldcPwmInit();
 

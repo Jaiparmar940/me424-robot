@@ -69,7 +69,7 @@ let mosfetState = {
   mag: false,
   vac: false,
   saw: false,
-  /** 0–100; MOSFET board GPIO 22 PWM (applied only while saw on). */
+  /** 0-100; GPIO 22 BLDC input (0V when off, PWM when saw on). */
   sawBldcSpeed: 0,
   toolId: 0,
   toolROhms: null,
@@ -975,12 +975,13 @@ async function runLimitAutohomeRoutine() {
 
     if (shouldAbortAutomation()) throw new Error('Cancelled');
 
-    const limitEndPose = [3400, -6000, -3200, 3400, 0, -3150];
-    const endMaxSps = Math.max(10, Math.floor(maxSps / 2));
+    const limitEndPose = [5080, -1800, -3010, 5080, -710, -2930];
+    const limitEndMaxSps = 800;
+    const limitEndRamp = 200;
     log(
-      `Limit autohome: (9/9) syncabs to [${limitEndPose.join(', ')}] (half speed: maxSps=${endMaxSps})…`,
+      `Limit autohome: (9/9) syncabs to [${limitEndPose.join(', ')}] (maxSps=${limitEndMaxSps}, ramp=${limitEndRamp})…`,
     );
-    await syncAbsAndWait(limitEndPose, endMaxSps, ramp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
+    await syncAbsAndWait(limitEndPose, limitEndMaxSps, limitEndRamp, LIFT_ROUTINE_SYNC_TIMEOUT_MS);
 
     log('Limit autohome: complete.');
   } catch (e) {

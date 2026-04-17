@@ -46,7 +46,7 @@
 
     <section class="card" id="mosfetControlCard">
       <h2>MOSFET / attachments</h2>
-      <p class="hint">Sends the same commands as the console (<code>mag on</code>, <code>vac off</code>, …) to the main board; the main forwards to the MOSFET slave. <strong>Saw power</strong> is GPIO <strong>23</strong> on the slave; <strong>BLDC throttle</strong> is PWM on slave GPIO <strong>22</strong> (<code>saw speed 0–100</code>). PWM is applied only while <code>saw on</code>. Button highlights follow the slave <code>STATUS</code>; speed syncs from <code>SAW_SPD</code> / <code>ACK SAW SPEED</code>.</p>
+      <p class="hint">Sends the same commands as the console (<code>mag on</code>, <code>vac off</code>, …) to the main board; the main forwards to the MOSFET slave. Saw now uses only slave GPIO <strong>22</strong> for BLDC controller input: <code>saw off</code> forces 0V and <code>saw on</code> applies PWM from <code>saw speed 0–100</code>. Button highlights follow the slave <code>STATUS</code>; speed syncs from <code>SAW_SPD</code> / <code>ACK SAW SPEED</code>.</p>
       <div class="mosfet-bldc-speed">
         <label class="mosfet-bldc-speed-label">
           <span>Saw BLDC speed (MOSFET GPIO 22) <strong id="sawBldcSpeedPct">0</strong>%</span>
