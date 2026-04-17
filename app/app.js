@@ -319,10 +319,17 @@ function applyZeroOffsetFromIncomingLine(line) {
   writeZeroOffsetInputs(vals);
 }
 
-function setZeroOffsetButtonsDisabled(disabled) {
-  ['zeroOffsetApplyBtn', 'zeroOffsetHereBtn', 'zeroOffsetClearBtn', 'zeroOffsetReadBtn'].forEach((id) => {
+/** Zero-offset bar: read/here need link only; apply/clear/S5 nudge need link + clear ESTOP. */
+function refreshZeroOffsetBarUI() {
+  const noLink = !linkReady;
+  const noMotion = !linkReady || estopLatchedUI;
+  ['zeroOffsetReadBtn', 'zeroOffsetHereBtn'].forEach((id) => {
     const b = document.getElementById(id);
-    if (b) b.disabled = disabled;
+    if (b) b.disabled = noLink;
+  });
+  ['zeroOffsetApplyBtn', 'zeroOffsetClearBtn', 's5NudgeCwBtn', 's5NudgeCcwBtn'].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = noMotion;
   });
 }
 
@@ -389,6 +396,7 @@ function updateEStopUI() {
   document.querySelectorAll('[id^="minus_"], [id^="plus_"], [id^="autohome_"]').forEach((b) => {
     b.disabled = disableMotion;
   });
+  refreshZeroOffsetBarUI();
 }
 
 function syncEStopFromIncomingLine(line) {
@@ -420,6 +428,9 @@ function isMotionCommand(cmd) {
   if (/^par\b/.test(c)) return true;
   if (/^vertical\b/.test(c)) return true;
   if (/^autohome\b/.test(c)) return true;
+  if (/^s5nudge\s+(cw|ccw)\b/.test(c)) return true;
+  if (/^zerooffset\s+clear\b/.test(c)) return true;
+  if (/^zerooffset\s+(-?\d+\s+){4}-?\d+\s*$/.test(c)) return true;
   return false;
 }
 
@@ -443,7 +454,7 @@ function setConnectedUI(connected) {
   });
    const bldcSl = document.getElementById('sawBldcSpeedSlider');
   if (bldcSl) bldcSl.disabled = !connected;
-  setZeroOffsetButtonsDisabled(!connected);
+  refreshZeroOffsetBarUI();
   updateEStopUI();
 }
 
@@ -1487,6 +1498,30 @@ function wireEvents() {
         await sendLine('zerooffset');
       } catch (e) {
         log(`zerooffset read: ${e.message}`);
+      }
+    });
+  }
+  const s5Cw = document.getElementById('s5NudgeCwBtn');
+  if (s5Cw) {
+    s5Cw.addEventListener('click', async () => {
+      if (!linkReady || estopLatchedUI) return;
+      try {
+        await sendLine('s5nudge cw');
+        requestWhere();
+      } catch (e) {
+        log(`s5nudge cw: ${e.message}`);
+      }
+    });
+  }
+  const s5Ccw = document.getElementById('s5NudgeCcwBtn');
+  if (s5Ccw) {
+    s5Ccw.addEventListener('click', async () => {
+      if (!linkReady || estopLatchedUI) return;
+      try {
+        await sendLine('s5nudge ccw');
+        requestWhere();
+      } catch (e) {
+        log(`s5nudge ccw: ${e.message}`);
       }
     });
   }

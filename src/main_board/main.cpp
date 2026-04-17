@@ -8,7 +8,7 @@
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 
-// Version 12.5
+// Version 12.6
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "surgical_clanker2.4"
@@ -528,6 +528,16 @@ bool stepMotor(int motorIndex, bool forward, int steps) {
   return true;
 }
 
+/** Match syncabs timing: half-period delay so average rate ~= sps steps/s. */
+static bool stepMotorAtSps(int motorIndex, bool forward, int steps, int sps) {
+  int saved = pulseDelayUs;
+  int spsClamped = max(1, sps);
+  pulseDelayUs = max(100, (int)(500000L / (long)spsClamped));
+  bool ok = stepMotor(motorIndex, forward, steps);
+  pulseDelayUs = saved;
+  return ok;
+}
+
 bool stepStage2(bool forward, int steps) {
   if (estopLatched) {
     printlnDebug("ESTOP: motion blocked");
@@ -870,6 +880,17 @@ bool runSyncAbs(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
     printlnDebug("SYNCABS: completed with one or more axes blocked by limits");
   }
   return true;
+}
+
+static const long kZeroOffsetRealignMaxSps = 800L;
+static const int kZeroOffsetRealignRamp = 200;
+
+/** After changing stage zero offsets, move so the previous logical pose is preserved in space. */
+static bool realignPhysicalToLogicalSnapshot(const long logical[NUM_DRIVERS]) {
+  if (estopLatched) return false;
+  long rawTarget[NUM_DRIVERS];
+  rawTargetsFromLogical(logical, rawTarget);
+  return runSyncAbs(rawTarget, kZeroOffsetRealignMaxSps, kZeroOffsetRealignRamp);
 }
 
 bool queueAddPose(long targets[NUM_DRIVERS], long maxSps, int rampSteps) {
@@ -1687,9 +1708,10 @@ void printHelp() {
   printlnBoth("  where         -> print tracked positions (logical; raw + zero offset)");
   printlnBoth("  setpos p1..p6 -> set logical positions (internal raw updated)");
   printlnBoth("  zerooffset    -> print step offsets S1..S5 (S2 = lift pair C1+C4)");
-  printlnBoth("  zerooffset d1..d5 -> set per-stage offsets; saved to flash");
-  printlnBoth("  zerooffset here -> set offsets so current pose reads as 0..0");
-  printlnBoth("  zerooffset clear -> all stage offsets 0");
+  printlnBoth("  zerooffset d1..d5 -> set offsets, save, then syncabs to keep same logical pose");
+  printlnBoth("  zerooffset here -> set offsets so current pose reads as 0..0 (no move)");
+  printlnBoth("  zerooffset clear -> zero offsets, save, then realign to prior logical pose");
+  printlnBoth("  s5nudge cw / s5nudge ccw -> S5 800 steps @ 200 stp/s (tool alignment)");
   printlnBoth("  home s1       -> jog C6 + (c6f/s1cw) to S1 limit, then C6=0");
   printlnBoth("  home s2..s4   -> drive to limit switches, then zero those axes");
   printlnBoth("  home sN bounce -> fast seek, back off, slow creep, then zero");
@@ -1930,16 +1952,36 @@ void handleCommand(String cmd) {
       return;
     }
     if (rest == "clear") {
+      if (estopLatched) {
+        sendERR("zerooffset", "estop");
+        return;
+      }
+      long logicalSnap[NUM_DRIVERS];
+      logicalPosFromRaw(logicalSnap);
       for (int s = 0; s < NUM_STAGES; s++) zeroStepOffsetByStage[s] = 0;
       saveZeroStepOffsets();
+      if (!realignPhysicalToLogicalSnapshot(logicalSnap)) {
+        sendERR("zerooffset", "realign failed");
+        return;
+      }
       sendDONE("zerooffset");
       return;
     }
     long z[NUM_STAGES];
     if (sscanf(rest.c_str(), "%ld %ld %ld %ld %ld",
                &z[0], &z[1], &z[2], &z[3], &z[4]) == 5) {
+      if (estopLatched) {
+        sendERR("zerooffset", "estop");
+        return;
+      }
+      long logicalSnap[NUM_DRIVERS];
+      logicalPosFromRaw(logicalSnap);
       for (int s = 0; s < NUM_STAGES; s++) zeroStepOffsetByStage[s] = z[s];
       saveZeroStepOffsets();
+      if (!realignPhysicalToLogicalSnapshot(logicalSnap)) {
+        sendERR("zerooffset", "realign failed");
+        return;
+      }
       sendDONE("zerooffset");
     } else {
       sendERR("zerooffset", "bad args");
@@ -2091,6 +2133,20 @@ void handleCommand(String cmd) {
       bool ok = stepMotor(STAGE4, true, steps);
       ok ? sendDONE("s4down") : sendERR("s4down", "aborted");
     } else { sendERR("s4down", "bad step count"); }
+    return;
+  }
+
+  // Stage 5 — fixed-speed tool-align nudges (offset / mating tests)
+  static const int kS5ToolAlignSteps = 800;
+  static const int kS5ToolAlignSps = 200;
+  if (cmd == "s5nudge cw") {
+    bool ok = stepMotorAtSps(STAGE5, false, kS5ToolAlignSteps, kS5ToolAlignSps);
+    ok ? sendDONE("s5nudge") : sendERR("s5nudge", "aborted");
+    return;
+  }
+  if (cmd == "s5nudge ccw") {
+    bool ok = stepMotorAtSps(STAGE5, true, kS5ToolAlignSteps, kS5ToolAlignSps);
+    ok ? sendDONE("s5nudge") : sendERR("s5nudge", "aborted");
     return;
   }
 

@@ -121,6 +121,21 @@ main {
   gap: 8px;
   align-items: center;
 }
+.zero-offset-s5 {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #30384a;
+}
+.zero-offset-s5-label {
+  font-size: 12px;
+  color: #a6b0c2;
+  margin-right: 4px;
+}
 button.mosfet-send.mosfet-alloff {
   border-color: #6b4040;
 }
