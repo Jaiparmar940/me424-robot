@@ -98,6 +98,29 @@ main {
   flex: 1 1 220px;
   min-width: 180px;
 }
+.zero-offset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.zero-offset-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #a6b0c2;
+}
+.zero-offset-grid input[type="number"] {
+  width: 4.75rem;
+}
+.zero-offset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 button.mosfet-send.mosfet-alloff {
   border-color: #6b4040;
 }

@@ -291,6 +291,41 @@ function applyMosfetFromIncomingLine(line) {
   }
 }
 
+const ZERO_OFF_IDS = ['zeroOffS1', 'zeroOffS2', 'zeroOffS3', 'zeroOffS4', 'zeroOffS5'];
+
+function readZeroOffsetInputs() {
+  return ZERO_OFF_IDS.map((id) => {
+    const el = document.getElementById(id);
+    let n = parseInt(el?.value ?? '0', 10);
+    if (Number.isNaN(n)) n = 0;
+    return n;
+  });
+}
+
+function writeZeroOffsetInputs(arr) {
+  ZERO_OFF_IDS.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el && typeof arr[i] === 'number' && !Number.isNaN(arr[i])) el.value = String(arr[i]);
+  });
+}
+
+/** Sync inputs from main board `ZERO_OFFSET S1=… S5=…` line. */
+function applyZeroOffsetFromIncomingLine(line) {
+  const m = line.match(
+    /^ZERO_OFFSET\s+S1=(-?\d+)\s+S2=(-?\d+)\s+S3=(-?\d+)\s+S4=(-?\d+)\s+S5=(-?\d+)/i,
+  );
+  if (!m) return;
+  const vals = [1, 2, 3, 4, 5].map((j) => parseInt(m[j], 10));
+  writeZeroOffsetInputs(vals);
+}
+
+function setZeroOffsetButtonsDisabled(disabled) {
+  ['zeroOffsetApplyBtn', 'zeroOffsetHereBtn', 'zeroOffsetClearBtn', 'zeroOffsetReadBtn'].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = disabled;
+  });
+}
+
 const els = {
   connectBtn: document.getElementById('connectBtn'),
   disconnectBtn: document.getElementById('disconnectBtn'),
@@ -406,8 +441,9 @@ function setConnectedUI(connected) {
   document.querySelectorAll('.mosfet-send').forEach((b) => {
     b.disabled = !connected;
   });
-  const bldcSl = document.getElementById('sawBldcSpeedSlider');
+   const bldcSl = document.getElementById('sawBldcSpeedSlider');
   if (bldcSl) bldcSl.disabled = !connected;
+  setZeroOffsetButtonsDisabled(!connected);
   updateEStopUI();
 }
 
@@ -490,6 +526,7 @@ async function connectWebSocket() {
       log(`WebSocket connected ${url}`);
       requestWhere()
         .then(() => sendLine('mstatus').catch(() => {}))
+        .then(() => sendLine('zerooffset').catch(() => {}))
         .then(() => sendLine('estop status').catch(() => {}))
         .then(resolve)
         .catch(resolve);
@@ -546,6 +583,7 @@ async function connectSerial() {
   log('Connected serial at 115200');
   await requestWhere();
   await sendLine('mstatus').catch(() => {});
+  await sendLine('zerooffset').catch(() => {});
   await sendLine('estop status').catch(() => {});
 }
 
@@ -640,6 +678,7 @@ function handleIncoming(line) {
   log(`< ${line}`);
 
   applyMosfetFromIncomingLine(line);
+  applyZeroOffsetFromIncomingLine(line);
   applySawBldcFromIncomingLine(line);
   syncEStopFromIncomingLine(line);
   notifyFwCompletionWaiters(line);
@@ -1400,6 +1439,57 @@ function wireEvents() {
       }
     });
   });
+
+  const zApply = document.getElementById('zeroOffsetApplyBtn');
+  if (zApply) {
+    zApply.addEventListener('click', async () => {
+      if (!linkReady) return;
+      const v = readZeroOffsetInputs();
+      try {
+        await sendLine(`zerooffset ${v.join(' ')}`);
+        await requestWhere();
+      } catch (e) {
+        log(`zerooffset: ${e.message}`);
+      }
+    });
+  }
+  const zHere = document.getElementById('zeroOffsetHereBtn');
+  if (zHere) {
+    zHere.addEventListener('click', async () => {
+      if (!linkReady) return;
+      try {
+        await sendLine('zerooffset here');
+        await sendLine('zerooffset');
+        await requestWhere();
+      } catch (e) {
+        log(`zerooffset here: ${e.message}`);
+      }
+    });
+  }
+  const zClear = document.getElementById('zeroOffsetClearBtn');
+  if (zClear) {
+    zClear.addEventListener('click', async () => {
+      if (!linkReady) return;
+      try {
+        await sendLine('zerooffset clear');
+        await sendLine('zerooffset');
+        await requestWhere();
+      } catch (e) {
+        log(`zerooffset clear: ${e.message}`);
+      }
+    });
+  }
+  const zRead = document.getElementById('zeroOffsetReadBtn');
+  if (zRead) {
+    zRead.addEventListener('click', async () => {
+      if (!linkReady) return;
+      try {
+        await sendLine('zerooffset');
+      } catch (e) {
+        log(`zerooffset read: ${e.message}`);
+      }
+    });
+  }
 }
 
 function init() {

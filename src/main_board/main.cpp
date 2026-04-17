@@ -6,8 +6,9 @@
 #include <LittleFS.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
+#include <Preferences.h>
 
-// Version 12.2
+// Version 12.4
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "surgical_clanker2.4"
@@ -100,10 +101,62 @@ const int STAGE4       = 2;   // controller 3
 const int STAGE2_LEFT  = 3;   // controller 4
 const int STAGE5       = 4;   // controller 5
 
+const int NUM_STAGES = 5;
+/** Per-stage zero step offset: logical = raw + offset(stage). S2 applies to both lift motors (C1+C4). Persisted as zs0..zs4. */
+long zeroStepOffsetByStage[NUM_STAGES] = {0, 0, 0, 0, 0};
+
+static long zeroOffsetForDriver(int driverIdx) {
+  if (driverIdx == STAGE1) return zeroStepOffsetByStage[0];
+  if (driverIdx == STAGE2_RIGHT || driverIdx == STAGE2_LEFT) return zeroStepOffsetByStage[1];
+  if (driverIdx == STAGE3) return zeroStepOffsetByStage[2];
+  if (driverIdx == STAGE4) return zeroStepOffsetByStage[3];
+  if (driverIdx == STAGE5) return zeroStepOffsetByStage[4];
+  return 0;
+}
+
 void enforceStage2PairTarget(long targets[NUM_DRIVERS]) {
   // Stage 2 must always remain paired (controllers 1 and 4).
   // Use C1 as the authoritative value when both are provided.
   targets[STAGE2_LEFT] = targets[STAGE2_RIGHT];
+}
+
+static void loadZeroStepOffsets() {
+  Preferences prefs;
+  if (!prefs.begin("me424", true)) return;
+  for (int s = 0; s < NUM_STAGES; s++) {
+    String k = "zs" + String(s);
+    if (prefs.isKey(k.c_str())) zeroStepOffsetByStage[s] = prefs.getLong(k.c_str(), 0);
+  }
+  prefs.end();
+}
+
+static void saveZeroStepOffsets() {
+  Preferences prefs;
+  if (!prefs.begin("me424", false)) return;
+  for (int s = 0; s < NUM_STAGES; s++) {
+    String k = "zs" + String(s);
+    prefs.putLong(k.c_str(), zeroStepOffsetByStage[s]);
+  }
+  prefs.end();
+}
+
+/** User/logical coordinates = raw motor counts + per-stage offset (S2 → C1+C4). */
+static void logicalPosFromRaw(long logicalOut[NUM_DRIVERS]) {
+  currentPos[STAGE2_LEFT] = currentPos[STAGE2_RIGHT];
+  for (int i = 0; i < NUM_DRIVERS; i++) {
+    logicalOut[i] = currentPos[i] + zeroOffsetForDriver(i);
+  }
+  logicalOut[STAGE2_LEFT] = logicalOut[STAGE2_RIGHT];
+}
+
+static void rawTargetsFromLogical(const long logical[NUM_DRIVERS], long rawOut[NUM_DRIVERS]) {
+  long paired[NUM_DRIVERS];
+  for (int i = 0; i < NUM_DRIVERS; i++) paired[i] = logical[i];
+  enforceStage2PairTarget(paired);
+  for (int i = 0; i < NUM_DRIVERS; i++) {
+    rawOut[i] = paired[i] - zeroOffsetForDriver(i);
+  }
+  rawOut[STAGE2_LEFT] = rawOut[STAGE2_RIGHT];
 }
 
 bool invertMotor[NUM_DRIVERS] = {
@@ -889,7 +942,9 @@ bool runQueueExecution() {
 
     QueueItem &it = runQueueItems[i];
     if (it.type == Q_POSE) {
-      bool ok = runSyncAbs(it.targets, it.maxSps, it.rampSteps);
+      long rawTargets[NUM_DRIVERS];
+      rawTargetsFromLogical(it.targets, rawTargets);
+      bool ok = runSyncAbs(rawTargets, it.maxSps, it.rampSteps);
       if (!ok) {
         printlnDebug("QRUN: pose aborted at item " + String(i));
         return false;
@@ -1529,7 +1584,8 @@ static void parseMacroMaxSpsRamp(const String &cmd, const char *keyword,
 
 static bool runVerticalMacro(long maxSps, int rampSteps) {
   long t[NUM_DRIVERS];
-  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i];
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i] - zeroOffsetForDriver(i);
+  t[STAGE2_LEFT] = t[STAGE2_RIGHT];
   return runSyncAbs(t, maxSps, rampSteps);
 }
 
@@ -1538,8 +1594,8 @@ static bool runLiftAutohomeMacro(long maxSps, int rampSteps) {
   long t[NUM_DRIVERS];
 
   for (int i = 0; i < NUM_DRIVERS; i++) t[i] = currentPos[i];
-  t[STAGE2_RIGHT] = kLiftRoutinePreS2;
-  t[STAGE2_LEFT] = kLiftRoutinePreS2;
+  t[STAGE2_RIGHT] = kLiftRoutinePreS2 - zeroOffsetForDriver(STAGE2_RIGHT);
+  t[STAGE2_LEFT] = t[STAGE2_RIGHT];
   if (!runSyncAbs(t, maxSps, rampSteps)) return false;
 
   if (!homeStage1ToLimit()) return false;
@@ -1547,27 +1603,29 @@ static bool runLiftAutohomeMacro(long maxSps, int rampSteps) {
   if (!homeStage4ToLimit()) return false;
 
   for (int i = 0; i < NUM_DRIVERS; i++) t[i] = currentPos[i];
-  t[STAGE3] = kLiftRoutinePostC2;
-  t[STAGE4] = kLiftRoutinePostC3;
+  t[STAGE3] = kLiftRoutinePostC2 - zeroOffsetForDriver(STAGE3);
+  t[STAGE4] = kLiftRoutinePostC3 - zeroOffsetForDriver(STAGE4);
   if (!runSyncAbs(t, maxSps, rampSteps)) return false;
 
   if (!homeStage2ToLimit()) return false;
 
-  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i];
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i] - zeroOffsetForDriver(i);
+  t[STAGE2_LEFT] = t[STAGE2_RIGHT];
   if (!runSyncAbs(t, maxSps, rampSteps)) return false;
 
   if (!homeStage2ToLimitBounce()) return false;
 
   for (int i = 0; i < NUM_DRIVERS; i++) t[i] = currentPos[i];
-  t[STAGE2_RIGHT] = kLiftRoutineBounceLift;
-  t[STAGE2_LEFT] = kLiftRoutineBounceLift;
+  t[STAGE2_RIGHT] = kLiftRoutineBounceLift - zeroOffsetForDriver(STAGE2_RIGHT);
+  t[STAGE2_LEFT] = t[STAGE2_RIGHT];
   if (!runSyncAbs(t, maxSps, rampSteps)) return false;
 
   if (!homeStage3ToLimitBounce()) return false;
   if (!homeStage4ToLimitBounce()) return false;
   if (!homeStage1ToLimitBounce()) return false;
 
-  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i];
+  for (int i = 0; i < NUM_DRIVERS; i++) t[i] = kAppVerticalPose[i] - zeroOffsetForDriver(i);
+  t[STAGE2_LEFT] = t[STAGE2_RIGHT];
   if (!runSyncAbs(t, maxSps, rampSteps)) return false;
 
   for (int i = 0; i < NUM_DRIVERS; i++) t[i] = 0;
@@ -1626,8 +1684,12 @@ void printHelp() {
   printlnBoth("Other:");
   printlnBoth("  ip            -> print this board WiFi IP and hostname");
   printlnBoth("  speed 800     -> set pulse delay in microseconds");
-  printlnBoth("  where         -> print current tracked positions");
-  printlnBoth("  setpos p1 p2 p3 p4 p5 p6 -> overwrite tracked positions");
+  printlnBoth("  where         -> print tracked positions (logical; raw + zero offset)");
+  printlnBoth("  setpos p1..p6 -> set logical positions (internal raw updated)");
+  printlnBoth("  zerooffset    -> print step offsets S1..S5 (S2 = lift pair C1+C4)");
+  printlnBoth("  zerooffset d1..d5 -> set per-stage offsets; saved to flash");
+  printlnBoth("  zerooffset here -> set offsets so current pose reads as 0..0");
+  printlnBoth("  zerooffset clear -> all stage offsets 0");
   printlnBoth("  home s1       -> jog C6 + (c6f/s1cw) to S1 limit, then C6=0");
   printlnBoth("  home s2..s4   -> drive to limit switches, then zero those axes");
   printlnBoth("  home sN bounce -> fast seek, back off, slow creep, then zero");
@@ -1832,14 +1894,56 @@ void handleCommand(String cmd) {
   }
 
   if (cmd == "where") {
-    currentPos[STAGE2_LEFT] = currentPos[STAGE2_RIGHT];
-    printlnControl("POS C1=" + String(currentPos[0]) +
-                " C2=" + String(currentPos[1]) +
-                " C3=" + String(currentPos[2]) +
-                " C4=" + String(currentPos[3]) +
-                " C5=" + String(currentPos[4]) +
-                " C6=" + String(currentPos[5]));
+    long L[NUM_DRIVERS];
+    logicalPosFromRaw(L);
+    printlnControl("POS C1=" + String(L[0]) +
+                " C2=" + String(L[1]) +
+                " C3=" + String(L[2]) +
+                " C4=" + String(L[3]) +
+                " C5=" + String(L[4]) +
+                " C6=" + String(L[5]));
     sendDONE("where");
+    return;
+  }
+
+  if (cmd == "zerooffset" || cmd.startsWith("zerooffset ")) {
+    if (cmd == "zerooffset") {
+      printlnControl("ZERO_OFFSET S1=" + String(zeroStepOffsetByStage[0]) +
+                     " S2=" + String(zeroStepOffsetByStage[1]) +
+                     " S3=" + String(zeroStepOffsetByStage[2]) +
+                     " S4=" + String(zeroStepOffsetByStage[3]) +
+                     " S5=" + String(zeroStepOffsetByStage[4]));
+      sendDONE("zerooffset");
+      return;
+    }
+    String rest = cmd.substring(11);
+    rest.trim();
+    if (rest == "here") {
+      currentPos[STAGE2_LEFT] = currentPos[STAGE2_RIGHT];
+      zeroStepOffsetByStage[0] = -currentPos[STAGE1];
+      zeroStepOffsetByStage[1] = -currentPos[STAGE2_RIGHT];
+      zeroStepOffsetByStage[2] = -currentPos[STAGE3];
+      zeroStepOffsetByStage[3] = -currentPos[STAGE4];
+      zeroStepOffsetByStage[4] = -currentPos[STAGE5];
+      saveZeroStepOffsets();
+      sendDONE("zerooffset");
+      return;
+    }
+    if (rest == "clear") {
+      for (int s = 0; s < NUM_STAGES; s++) zeroStepOffsetByStage[s] = 0;
+      saveZeroStepOffsets();
+      sendDONE("zerooffset");
+      return;
+    }
+    long z[NUM_STAGES];
+    if (sscanf(rest.c_str(), "%ld %ld %ld %ld %ld",
+               &z[0], &z[1], &z[2], &z[3], &z[4]) == 5) {
+      for (int s = 0; s < NUM_STAGES; s++) zeroStepOffsetByStage[s] = z[s];
+      saveZeroStepOffsets();
+      sendDONE("zerooffset");
+    } else {
+      sendERR("zerooffset", "bad args");
+    }
     return;
   }
 
@@ -1847,8 +1951,9 @@ void handleCommand(String cmd) {
     long p[NUM_DRIVERS];
     if (sscanf(cmd.c_str(), "setpos %ld %ld %ld %ld %ld %ld",
                &p[0], &p[1], &p[2], &p[3], &p[4], &p[5]) == 6) {
-      p[STAGE2_LEFT] = p[STAGE2_RIGHT];
-      for (int i = 0; i < NUM_DRIVERS; i++) currentPos[i] = p[i];
+      enforceStage2PairTarget(p);
+      for (int i = 0; i < NUM_DRIVERS; i++) currentPos[i] = p[i] - zeroOffsetForDriver(i);
+      currentPos[STAGE2_LEFT] = currentPos[STAGE2_RIGHT];
       sendDONE("setpos");
     } else {
       sendERR("setpos", "bad args");
@@ -1861,7 +1966,9 @@ void handleCommand(String cmd) {
     long maxSps = 0;
     int rampSteps = 0;
     if (parseSyncAbsArgs(cmd, targets, maxSps, rampSteps) == 8) {
-      bool ok = runSyncAbs(targets, maxSps, rampSteps);
+      long raw[NUM_DRIVERS];
+      rawTargetsFromLogical(targets, raw);
+      bool ok = runSyncAbs(raw, maxSps, rampSteps);
       ok ? sendDONE("syncabs") : sendERR("syncabs", "aborted");
     } else {
       sendERR("syncabs", "bad args");
@@ -2175,6 +2282,8 @@ void setup() {
   SensorSerial.begin(SENSOR_BAUD, SERIAL_8N1, SENSOR_RX_PIN, SENSOR_TX_PIN);
 
   delay(1000);
+
+  loadZeroStepOffsets();
 
   printlnBoth("Main board ready");
   printlnBoth("USB serial + WiFi (TCP 3333 / WebSocket 81) + HTTP UI on /");

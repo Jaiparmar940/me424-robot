@@ -92,6 +92,20 @@
       </div>
       <p class="hint"><strong>Limit autohome</strong> bounce-homes all five stages once (S1, S3, S4, S2, S5) with safe pre-positioning. <strong>Lift autohome</strong> does a full two-pass calibration (straight then bounce) for all stages, then moves to the vertical pose and sets it as the tracked origin (<code>setpos 0…0</code>). Both use <strong>Jog Speed</strong> / <strong>Ramp Steps</strong> for syncabs moves.</p>
       <p class="hint">Use <strong>Auto home</strong> under each axis for individual firmware homing (bounce). Stage 5 uses the Hall sensor (GPIO14 / HW-477; <code>limits</code> shows <code>S5H=0</code> at zero). Stage 5 Hall does not block motion—only used for homing.</p>
+      <p class="hint"><strong>Logical zero offset</strong> (steps, <strong>S1–S5</strong>): <code>where</code> / <code>syncabs</code> / <code>setpos</code> use <em>logical</em> coords = raw motor counts + that stage’s offset. <strong>S2</strong> is the lift pair (applies to both C1 and C4). Values persist on the main board (NVS).</p>
+      <div class="zero-offset-grid">
+        <label>S1<input id="zeroOffS1" type="number" step="1" value="0" /></label>
+        <label>S2 lift<input id="zeroOffS2" type="number" step="1" value="0" /></label>
+        <label>S3<input id="zeroOffS3" type="number" step="1" value="0" /></label>
+        <label>S4<input id="zeroOffS4" type="number" step="1" value="0" /></label>
+        <label>S5<input id="zeroOffS5" type="number" step="1" value="0" /></label>
+        <div class="zero-offset-actions">
+          <button type="button" id="zeroOffsetApplyBtn" disabled>Apply offsets</button>
+          <button type="button" id="zeroOffsetHereBtn" disabled>Current pose → logical 0</button>
+          <button type="button" id="zeroOffsetClearBtn" disabled>Clear offsets</button>
+          <button type="button" id="zeroOffsetReadBtn" disabled>Read from robot</button>
+        </div>
+      </div>
     </section>
 
     <section class="card">
