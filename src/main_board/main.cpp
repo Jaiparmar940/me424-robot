@@ -8,7 +8,7 @@
 #include <WebSocketsServer.h>
 #include <Preferences.h>
 
-// Version 12.6
+// Version 12.7
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "surgical_clanker2.4"
@@ -169,7 +169,7 @@ bool invertMotor[NUM_DRIVERS] = {
 };
 
 // =========================
-// UART to MOSFET slave
+// UART to MOSFET slave (or merge tool UART onto sensor link — see MOSFET_OVER_SENSOR_UART)
 // Assumes RX2/TX2 map to GPIO16/GPIO17 on your board.
 // If not, change these.
 // =========================
@@ -303,8 +303,19 @@ void sendERR(const String &tag, const String &reason) {
 }
 
 void sendToSlave(const String &msg) {
+#if defined(MOSFET_OVER_SENSOR_UART)
+  // Sensor ESP32 handles limits + tool on one UART. "STATUS" here means MOSFET-style tool status
+  // (main "limits" command sends STATUS directly on SensorSerial, not via sendToSlave).
+  String out = msg;
+  if (out == "STATUS") {
+    out = "MSTATUS";
+  }
+  SensorSerial.println(out);
+  printlnBoth("[TO SENSOR/MOS] " + out);
+#else
   SlaveSerial.println(msg);
   printlnBoth("[TO SLAVE] " + msg);
+#endif
 }
 
 void parseEStopLine(String line) {
@@ -363,7 +374,14 @@ void parseSensorMessage(String msg) {
   msg.trim();
   msg.toUpperCase();
 
-  if (!msg.startsWith("LIM ")) return;
+  if (!msg.startsWith("LIM ")) {
+#if defined(MOSFET_OVER_SENSOR_UART)
+    if (msg.startsWith("STATUS MAG=") || msg.startsWith("ACK ") || msg.startsWith("ERR ")) {
+      printlnBoth("[MOS] " + msg);
+    }
+#endif
+    return;
+  }
 
   const bool prevS1 = stage1CWLimitHit;
   const bool prevS2 = stage2LimitHit;
@@ -2260,6 +2278,7 @@ void readFromWiFi() {
 }
 
 void readFromSlave() {
+#if !defined(MOSFET_OVER_SENSOR_UART)
   while (SlaveSerial.available()) {
     char c = (char)SlaveSerial.read();
 
@@ -2273,6 +2292,7 @@ void readFromSlave() {
       slaveBuffer += c;
     }
   }
+#endif
 }
 
 void setup() {
@@ -2348,7 +2368,9 @@ void setup() {
     Serial.println("WiFi disabled (set WIFI_SSID/WIFI_PASSWORD build flags)");
   }
 
+#if !defined(MOSFET_OVER_SENSOR_UART)
   SlaveSerial.begin(SLAVE_BAUD, SERIAL_8N1, SLAVE_RX_PIN, SLAVE_TX_PIN);
+#endif
   SensorSerial.begin(SENSOR_BAUD, SERIAL_8N1, SENSOR_RX_PIN, SENSOR_TX_PIN);
 
   delay(1000);
@@ -2357,7 +2379,11 @@ void setup() {
 
   printlnBoth("Main board ready");
   printlnBoth("USB serial + WiFi (TCP 3333 / WebSocket 81) + HTTP UI on /");
+#if !defined(MOSFET_OVER_SENSOR_UART)
   printlnBoth("UART2 to MOSFET slave ready");
+#else
+  printlnBoth("MOSFET commands -> sensor UART (no separate slave UART)");
+#endif
   printlnBoth("UART1 to sensor board ready");
   if (WiFi.status() == WL_CONNECTED) {
     printlnBoth("OTA host: " + String(WIFI_HOSTNAME) + ".local");

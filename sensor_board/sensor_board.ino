@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
+#include <math.h>
 
 #ifndef WIFI_SSID
 #define WIFI_SSID ""
@@ -20,6 +21,190 @@ HardwareSerial MainSerial(1);
 const int UART_RX_PIN = 26;
 const int UART_TX_PIN = 27;
 const long UART_BAUD = 115200;
+
+// --- Tool: MAG/VAC/SAW + tool ID + probe (same protocol as old MOSFET board) ---
+// UART to main stays on GPIO26/27 — do not use those for tool.
+// MAG=18, VAC=19. SAW: GPIO21 enables saw power MOSFET; GPIO22 is BLDC PWM to driver.
+// Tool ID + pot: GPIO34/35 are ADC1 input-only (divider + wiper; never drive them).
+const int MAG_PIN = 18;
+const int VAC_PIN = 19;
+/** Saw load / power-path MOSFET gate (digital). */
+const int SAW_MOSFET_PIN = 21;
+const int SAW_BLDC_PWM_PIN = 22;
+const int SAW_BLDC_PWM_CHANNEL = 0;
+const int SAW_BLDC_PWM_FREQ_HZ = 5000;
+const int SAW_BLDC_PWM_BITS = 8;
+
+// Tool ID: 3.3V — 10k — node (ADC pin) — tool resistor (2.2k / 5k / 10k) — GND
+const int TOOL_ID_ADC_PIN = 34;
+const float TOOL_R_SERIES_OHMS = 10000.0f;
+const float TOOL_VCC = 3.3f;
+
+// Pot / probe stroke (mm); raw 4095 = free (no compression)
+const int POT_ADC_PIN = 35;
+const float POT_STROKE_MM = 26.9875f;
+const int POT_RAW_FREE = 4095;
+
+static const int TOOL_NOMINAL_OHMS[3] = {2200, 5000, 10000};
+
+/** Magnet auto-off after continuous ON (safety after manual / UI mag on). */
+#ifndef MAG_AUTO_OFF_MS
+#define MAG_AUTO_OFF_MS 30000UL
+#endif
+
+bool magState = false;
+/** millis() when MAG last turned on; 0 if MAG off. */
+static unsigned long magOnSinceMs = 0;
+bool vacState = false;
+bool sawState = false;
+uint8_t sawSpeedPercent = 0;
+bool sawBldcPwmAttached = false;
+
+static void sawBldcPwmInit() {
+  ledcSetup(SAW_BLDC_PWM_CHANNEL, SAW_BLDC_PWM_FREQ_HZ, SAW_BLDC_PWM_BITS);
+  pinMode(SAW_BLDC_PWM_PIN, OUTPUT);
+  digitalWrite(SAW_BLDC_PWM_PIN, LOW);
+}
+
+static void sawBldcEnsureAttached() {
+  if (sawBldcPwmAttached) return;
+  ledcAttachPin(SAW_BLDC_PWM_PIN, SAW_BLDC_PWM_CHANNEL);
+  sawBldcPwmAttached = true;
+}
+
+static void sawBldcForceLow() {
+  if (sawBldcPwmAttached) {
+    ledcWrite(SAW_BLDC_PWM_CHANNEL, 0);
+    ledcDetachPin(SAW_BLDC_PWM_PIN);
+    sawBldcPwmAttached = false;
+  }
+  pinMode(SAW_BLDC_PWM_PIN, OUTPUT);
+  digitalWrite(SAW_BLDC_PWM_PIN, LOW);
+}
+
+static void sawBldcApplyDuty(uint32_t duty) {
+  sawBldcEnsureAttached();
+  ledcWrite(SAW_BLDC_PWM_CHANNEL, duty);
+}
+
+static uint32_t sawSpeedDuty() {
+  uint32_t duty = (uint32_t)sawSpeedPercent * 255U / 100U;
+  if (duty > 255U) duty = 255U;
+  return duty;
+}
+
+static void sawBldcPwmApply() {
+  if (!sawState) {
+    digitalWrite(SAW_MOSFET_PIN, LOW);
+    sawBldcForceLow();
+    return;
+  }
+  digitalWrite(SAW_MOSFET_PIN, HIGH);
+  const uint32_t duty = sawSpeedDuty();
+  if (duty == 0U) {
+    sawBldcForceLow();
+    return;
+  }
+  sawBldcApplyDuty(duty);
+}
+
+static void sawBldcPwmSetpointOnly() {
+  if (!sawState) return;
+  digitalWrite(SAW_MOSFET_PIN, HIGH);
+  const uint32_t duty = sawSpeedDuty();
+  if (duty == 0U) {
+    sawBldcForceLow();
+    return;
+  }
+  sawBldcApplyDuty(duty);
+}
+
+void setMag(bool on) {
+  magState = on;
+  digitalWrite(MAG_PIN, on ? HIGH : LOW);
+  magOnSinceMs = on ? millis() : 0;
+}
+
+void setVac(bool on) {
+  vacState = on;
+  digitalWrite(VAC_PIN, on ? HIGH : LOW);
+}
+
+void setSaw(bool on) {
+  sawState = on;
+  sawBldcPwmApply();
+}
+
+int readAdcAvg(int pin, int samples = 16) {
+  long acc = 0;
+  for (int i = 0; i < samples; i++) {
+    acc += analogRead(pin);
+    delayMicroseconds(50);
+  }
+  return (int)(acc / samples);
+}
+
+float adcVoltageFromRaw(int raw) {
+  return (float)raw / 4095.0f * TOOL_VCC;
+}
+
+float computeToolRFromVoltage(float vTap) {
+  if (vTap <= 0.01f || vTap >= TOOL_VCC - 0.01f) return 0.0f;
+  return vTap * TOOL_R_SERIES_OHMS / (TOOL_VCC - vTap);
+}
+
+/** 1=2.2k, 2=5k, 3=10k, 0=unknown */
+int classifyToolOhms(float r) {
+  if (r < 500.0f) return 0;
+  int best = 0;
+  float bestErr = 1e9f;
+  for (int i = 0; i < 3; i++) {
+    float err = fabsf(r - (float)TOOL_NOMINAL_OHMS[i]);
+    if (err < bestErr) {
+      bestErr = err;
+      best = i + 1;
+    }
+  }
+  if (bestErr > 1500.0f) return 0;
+  return best;
+}
+
+float readCompressionMm() {
+  int raw = readAdcAvg(POT_ADC_PIN);
+  float compression = (float)(POT_RAW_FREE - raw) / 4095.0f * POT_STROKE_MM;
+  if (compression < 0.0f) compression = 0.0f;
+  return compression;
+}
+
+void readToolId(float &rOut, int &idOut) {
+  int raw = readAdcAvg(TOOL_ID_ADC_PIN);
+  float v = adcVoltageFromRaw(raw);
+  rOut = computeToolRFromVoltage(v);
+  idOut = classifyToolOhms(rOut);
+}
+
+void sendAck(const String &msg) {
+  MainSerial.println(msg);
+  Serial.println(msg);
+}
+
+/** Full tool line for main UI / mstatus (same shape as MOSFET board). */
+void sendMosfetStyleStatus() {
+  float rTool = 0;
+  int toolId = 0;
+  readToolId(rTool, toolId);
+  float compMm = readCompressionMm();
+
+  String msg = "STATUS MAG=" + String(magState ? "ON" : "OFF") +
+               " VAC=" + String(vacState ? "ON" : "OFF") +
+               " SAW=" + String(sawState ? "ON" : "OFF") +
+               " SAW_SPD=" + String((int)sawSpeedPercent) +
+               " TOOL_R=" + String(rTool, 0) +
+               " TOOL_ID=" + String(toolId) +
+               " COMP_MM=" + String(compMm, 2);
+  MainSerial.println(msg);
+  Serial.println(msg);
+}
 
 // Limit switches (wired to GND)
 // Stage 1 turntable: CW-only limit (sensor D13). S1=1 when active (blocks s1cw on main).
@@ -167,8 +352,61 @@ void handleCommand(String cmd) {
 
   if (cmd.length() == 0) return;
 
+  // Tool status (main sends MSTATUS when MOSFET commands are routed over this UART).
+  if (cmd == "MSTATUS") {
+    sendMosfetStyleStatus();
+    return;
+  }
+
   if (cmd == "STATUS") {
     sendLimitStatus();
+    return;
+  }
+
+  if (cmd == "MAG ON") {
+    setMag(true);
+    sendAck("ACK MAG ON");
+    return;
+  }
+  if (cmd == "MAG OFF") {
+    setMag(false);
+    sendAck("ACK MAG OFF");
+    return;
+  }
+  if (cmd == "VAC ON") {
+    setVac(true);
+    sendAck("ACK VAC ON");
+    return;
+  }
+  if (cmd == "VAC OFF") {
+    setVac(false);
+    sendAck("ACK VAC OFF");
+    return;
+  }
+  if (cmd == "SAW ON") {
+    setSaw(true);
+    sendAck("ACK SAW ON");
+    return;
+  }
+  if (cmd == "SAW OFF") {
+    setSaw(false);
+    sendAck("ACK SAW OFF");
+    return;
+  }
+  if (cmd.startsWith("SAW SPEED ")) {
+    int v = cmd.substring(10).toInt();
+    if (v < 0) v = 0;
+    if (v > 100) v = 100;
+    sawSpeedPercent = (uint8_t)v;
+    sawBldcPwmSetpointOnly();
+    sendAck("ACK SAW SPEED " + String((int)sawSpeedPercent));
+    return;
+  }
+  if (cmd == "ALL OFF") {
+    setMag(false);
+    setVac(false);
+    setSaw(false);
+    sendAck("ACK ALL OFF");
     return;
   }
 
@@ -202,11 +440,26 @@ void setup() {
     Serial.println("WiFi disabled (set WIFI_SSID/WIFI_PASSWORD build flags)");
   }
 
+  pinMode(MAG_PIN, OUTPUT);
+  pinMode(VAC_PIN, OUTPUT);
+  pinMode(SAW_MOSFET_PIN, OUTPUT);
+  digitalWrite(MAG_PIN, LOW);
+  digitalWrite(VAC_PIN, LOW);
+  digitalWrite(SAW_MOSFET_PIN, LOW);
+  (void)ledcDetachPin(MAG_PIN);
+  (void)ledcDetachPin(VAC_PIN);
+  (void)ledcDetachPin(SAW_MOSFET_PIN);
+  (void)ledcDetachPin(SAW_BLDC_PWM_PIN);
+  sawBldcPwmInit();
+
   pinMode(STAGE1_CW_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE2_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE3_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE4_LIMIT_PIN, INPUT_PULLUP);
   pinMode(STAGE5_HALL_PIN, INPUT);
+
+  analogSetPinAttenuation(TOOL_ID_ADC_PIN, ADC_11db);
+  analogSetPinAttenuation(POT_ADC_PIN, ADC_11db);
 
   delay(200);
 
@@ -240,7 +493,8 @@ void setup() {
   stage5HallRawChangeMs = millis();
 
   Serial.println(String("Sensor board ready (S1–S4 mech debounce ") + LIMIT_MECH_DEBOUNCE_MS +
-                 " ms, S5 hall GPIO14)");
+                 " ms, S5 hall GPIO14; MAG=18 VAC=19 SAW_MOS=21 SAW_PWM=22 TOOL_ID_ADC=34 POT_ADC=35; MAG auto-off " +
+                 String((unsigned long)(MAG_AUTO_OFF_MS / 1000UL)) + "s)");
   MainSerial.println("SENSOR READY");
   sendLimitStatus();
 }
@@ -258,6 +512,12 @@ void loop() {
     } else {
       uartBuffer += c;
     }
+  }
+
+  if (magState && magOnSinceMs != 0UL && (millis() - magOnSinceMs) >= MAG_AUTO_OFF_MS) {
+    setMag(false);
+    Serial.println("MAG: auto-off (timeout)");
+    MainSerial.println("MAG AUTO OFF");
   }
 
   bool s1 = readStage1CWHit();
