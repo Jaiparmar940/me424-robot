@@ -1332,6 +1332,33 @@ bool homeStage4ToLimit() {
   return true;
 }
 
+/**
+ * During bounce homing, the sensor debounce window can keep S3/S4 marked as "hit"
+ * right after backoff. Confirm release (and add tiny extra backoff if needed)
+ * so the second-touch creep is a real re-contact, not an immediate no-op.
+ */
+static bool ensureStageLimitReleasedForBounce(int stageIdx, volatile bool &limitHit, const char *tag) {
+  for (int attempt = 0; attempt < 6; attempt++) {
+    unsigned long t0 = millis();
+    while (millis() - t0 < 120UL) {
+      pollEmergencyInputs();
+      serviceSensorUART();
+      if (estopLatched) return false;
+      if (!limitHit) return true;
+      delay(2);
+    }
+
+    // Still active after waiting: nudge farther away from the limit.
+    bool ok = false;
+    if (stageIdx == STAGE3 || stageIdx == STAGE4) {
+      ok = stepMotor(stageIdx, false, 36);
+    }
+    if (!ok) return false;
+  }
+  printlnDebug(String(tag) + " bounce: limit stayed active after backoff");
+  return !limitHit;
+}
+
 bool homeStage1ToLimitBounce() {
   homeStartTimer();
   if (estopLatched) return false;
@@ -1408,6 +1435,10 @@ bool homeStage3ToLimitBounce() {
   if (estopLatched) return false;
   if (!stepMotor(STAGE3, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
   serviceSensorUART();
+  if (!ensureStageLimitReleasedForBounce(STAGE3, stage3LimitHit, "HOME S3")) {
+    pulseDelayUs = saved;
+    return false;
+  }
   pulseDelayUs = homeBounceSlowPulseUs(saved);
   if (!homeStage3SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
     pulseDelayUs = saved;
@@ -1439,6 +1470,10 @@ bool homeStage4ToLimitBounce() {
   if (estopLatched) return false;
   if (!stepMotor(STAGE4, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
   serviceSensorUART();
+  if (!ensureStageLimitReleasedForBounce(STAGE4, stage4LimitHit, "HOME S4")) {
+    pulseDelayUs = saved;
+    return false;
+  }
   pulseDelayUs = homeBounceSlowPulseUs(saved);
   if (!homeStage4SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
     pulseDelayUs = saved;
