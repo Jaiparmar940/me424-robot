@@ -1,37 +1,28 @@
 % =====================================================
-% ME424 Robot - SIMPLE LANDSCAPE + SIDE-BY-SIDE APPENDIX
+% ME424 Robot - SIMPLE TIGHT CODE APPENDIX
 % =====================================================
 % 
 % Add to the VERY FIRST LINE of main.tex:
 % \UseRawInputEncoding
 % 
 % Add to preamble:
-% \usepackage{pdflscape}
-% \usepackage{multicol}
 % \usepackage{verbatim}
 % \usepackage{xcolor}
 % \usepackage{hyperref}
 % 
-% Usage in main.tex:
-% \appendix
+% Usage:
 % \input{code/docs/code_appendix_simple.tex}
-% 
-% This is the simple robust version (verbatiminput) with landscape, 2-column layout, 
-% tighter \scriptsize font and minimal spacing.
+% (or paste the content below directly into your appendix section)
 
-\begin{landscape}
 \section*{Appendix: Complete Project Source Code}
 \label{app:full-source}
 \addcontentsline{toc}{section}{Appendix: Complete Project Source Code}
 
-This appendix contains all custom project code in landscape 2-column format with tight spacing. Only project-specific files are included.
-
-\vspace{0.5em}
-\begin{multicols}{2}
+This appendix contains all custom project code with very tight formatting (\scriptsize font, minimal spacing). Only project-specific files are included.
 
 \subsection*{Firmware - Main Board}
 
-\textbf{File: \texttt{code/src/main\_board/main.cpp} (Primary)}
+\textbf{File: \texttt{code/src/main\_board/main.cpp} (Primary implementation)}
 
 \verbatiminput{code/src/main_board/main.cpp}
 
@@ -69,10 +60,6 @@ This appendix contains all custom project code in landscape 2-column format with
 
 \verbatiminput{code/data/app.js}
 
-\end{multicols}
-
-\begin{multicols}{2}
-
 \subsection*{Configuration \& Docs}
 
 \textbf{File: \texttt{code/platformio.ini}}
@@ -91,7 +78,7 @@ This appendix contains all custom project code in landscape 2-column format with
 
 \verbatiminput{code/docs/application_ui_subsection.tex}
 
-\subsection*{ROS/Python \& Pose Example}
+\subsection*{ROS/Python Support (Key Files)}
 
 \textbf{File: \texttt{code/ros-py/serial_bridge.py}}
 
@@ -101,15 +88,13 @@ This appendix contains all custom project code in landscape 2-column format with
 
 \verbatiminput{code/ros-py/ros_src.py}
 
-\textbf{File: \texttt{code/poses/me424-homing.json} (Example)}
+\subsection*{Pose Data Example}
+
+\textbf{File: \texttt{code/poses/me424-homing.json}}
 
 \verbatiminput{code/poses/me424-homing.json}
 
-\end{multicols}
-
-\vspace{1em}
-\noindent \textbf{Note:} This is the stable simple version. If any file says "not found", check the exact path in Overleaf or comment out the line with \%. 
+\vspace{0.5em}
+\noindent \textbf{Note:} Very tight formatting with \scriptsize font and minimal spacing. If any file is not found, upload the `code/` folder structure to Overleaf or comment out the line with \%. 
 
 To reference this appendix: `\ref{app:full-source}` or `\autoref{app:full-source}`.
-
-\end{landscape}
