@@ -1,0 +1,144 @@
+% =====================================================
+% ME424 Robot Project - Complete Code Appendix (Overleaf - code/ folder)
+% =====================================================
+%
+% **Your structure**: All folders are inside a top-level `code/` folder.
+% Paths have been updated to `code/src/...`, `code/app/...`, etc.
+%
+% **Simplest option (recommended)**:
+% 1. Copy-paste the content below (starting at \section*{Appendix...}) into your main report's appendix.
+% 2. Ensure the `code/` folder exists in Overleaf with all the subfolders/files.
+% 3. Add these packages to your main report preamble (near the top):
+%      \usepackage[utf8]{inputenc}
+%      \usepackage[T1]{fontenc}
+%      \usepackage{listings}
+%      \usepackage{xcolor}
+%      \usepackage{hyperref}
+%      \usepackage{array}   % fixes the "Illegal pream-token (L/C)" table errors
+% 4. Recompile. The new settings should resolve the UTF-8, JavaScript, and math-mode errors.
+%
+% If you still get errors, reply with the new log — common fixes are ready.
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{green!60!black},
+  stringstyle=\color{red!60!black},
+  numberstyle=\tiny\color{gray!60},
+  numbersep=4pt,
+  backgroundcolor=\color{gray!8},
+  frame=single,
+  framesep=3pt,
+  framerule=0.4pt,
+  tabsize=2,
+  breaklines=true,
+  breakatwhitespace=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+  keepspaces=true,
+  showspaces=false,
+  showstringspaces=false,
+  aboveskip=2pt,
+  belowskip=2pt,
+  xleftmargin=12pt,
+  xrightmargin=6pt,
+  columns=flexible,
+  linewidth=0.98\linewidth,
+  inputencoding=utf8,
+  extendedchars=true,
+  % Prevent UTF-8 and special character errors common in Arduino/JS code
+  literate={�}{{\textquestiondown}}1 {–}{{-}}1 {’}{{'}}1 {“}{{"}}1 {”}{{"}}1,
+  % Make JavaScript use C++ highlighting (more reliable in listings)
+  language=C++
+}
+
+% Define additional languages
+\lstdefinelanguage{PlatformIO}{
+  morekeywords={platform,board,framework,env,build_flags,lib_deps,build_src_filter,upload_port,monitor_speed,upload_protocol,extends},
+  sensitive=false,
+  morecomment=[l]{;},
+  morecomment=[l]{\#},
+}
+
+% For Markdown and JSON, listings falls back gracefully
+
+\section*{Appendix: Complete Project Source Code}
+
+\subsection*{Firmware - Main Board}
+\textbf{File:} \texttt{src/main_board/main.cpp} (Primary implementation, \textasciitilde 4100 lines)
+
+\lstinputlisting[language=C++,caption={Primary Main Board Firmware - code/src/main_board/main.cpp},label=lst:src-main-board]{code/src/main_board/main.cpp}
+
+\textbf{File:} \texttt{code/main_board/main_board.ino} (Legacy version)
+
+\lstinputlisting[language=C++,caption={Legacy Main Board - code/main_board/main_board.ino},label=lst:main-board-ino]{code/main_board/main_board.ino}
+
+\subsection*{Firmware - Sensor Board}
+\textbf{File:} \texttt{code/sensor_board/sensor_board.ino} (Primary sensor/tool firmware)
+
+\lstinputlisting[language=C++,caption={Sensor Board Firmware - code/sensor_board/sensor_board.ino},label=lst:sensor-board]{code/sensor_board/sensor_board.ino}
+
+\textbf{File:} \texttt{code/src/sensor_board/main.cpp} (PlatformIO version)
+
+\lstinputlisting[language=C++,caption={PlatformIO Sensor Board - code/src/sensor_board/main.cpp},label=lst:src-sensor-board]{code/src/sensor_board/main.cpp}
+
+\subsection*{Firmware - MOSFET/Tool Board}
+\textbf{File:} \texttt{code/src/mosfet_board/main.cpp} 
+
+\lstinputlisting[language=C++,caption={MOSFET Board Firmware - code/src/mosfet_board/main.cpp},label=lst:src-mosfet-board]{code/src/mosfet_board/main.cpp}
+
+\textbf{File:} \texttt{code/mosfet_board/mosfet_board.ino} (Legacy)
+
+\lstinputlisting[language=C++,caption={Legacy MOSFET Board - code/mosfet_board/mosfet_board.ino},label=lst:mosfet-board-ino]{code/mosfet_board/mosfet_board.ino}
+
+\subsection*{Web Interface}
+\textbf{File:} \texttt{code/app/app.js} (Main browser UI application, \textasciitilde 1565 lines - WebSocket, command UI, pose execution, etc.)
+
+\lstinputlisting[language=C++,caption={Web UI - code/app/app.js},label=lst:app-js]{code/app/app.js}
+
+\textbf{File:} \texttt{code/data/app.js} (Version served from LittleFS)
+
+\lstinputlisting[language=C++,caption={Served UI - code/data/app.js},label=lst:data-app-js]{code/data/app.js}
+
+\subsection*{Project Configuration}
+\textbf{File:} \texttt{code/platformio.ini}
+
+\lstinputlisting[language=PlatformIO,caption={PlatformIO Configuration},label=lst:platformio-ini]{code/platformio.ini}
+
+\textbf{File:} \texttt{code/README.md}
+
+\lstinputlisting[language=,caption={Project README.md},label=lst:readme]{code/README.md}
+
+\subsection*{Simulation and Docs}
+\textbf{File:} \texttt{code/wokwi/diagram.json} \& \texttt{code/wokwi/README.md}
+
+\lstinputlisting[language=JSON,caption={Wokwi Diagram - code/wokwi/diagram.json},label=lst:wokwi-diagram]{code/wokwi/diagram.json}
+
+\lstinputlisting[language=,caption={Wokwi README},label=lst:wokwi-readme]{code/wokwi/README.md}
+
+\textbf{File:} \texttt{code/docs/application_ui_subsection.tex} (UI documentation subsection)
+
+\lstinputlisting[language=TeX,caption={UI Documentation Subsection},label=lst:ui-subsection]{code/docs/application_ui_subsection.tex}
+
+\subsection*{ROS/Python Support}
+Key files from \texttt{ros-py/} (full directory contains additional bridge, IK, launch files; old/ directory has legacy code):
+
+\lstinputlisting[language=Python,caption={Serial Bridge - code/ros-py/serial_bridge.py},label=lst:serial-bridge]{code/ros-py/serial_bridge.py}
+
+\lstinputlisting[language=Python,caption={ROS Source - code/ros-py/ros_src.py},label=lst:ros-src]{code/ros-py/ros_src.py}
+
+% Example of additional files (uncomment and adjust paths as needed):
+% \lstinputlisting[language=Python,caption={RAMSES Robot Bridge},label=lst:ramses-bridge]{code/ros-py/ros_def/ramses_robot_bridge/ramses_robot_bridge/ramses_robot_bridge.py}
+
+\subsection*{Pose Data (Example)}
+Pose JSON files define motion sequences. Example shown; others follow similar format.
+
+\lstinputlisting[language=JSON,caption={Example Pose - code/poses/me424-homing.json},label=lst:homing-json]{code/poses/me424-homing.json}
+
+% Additional poses (me424-*.json, saw-*.json) can be added similarly if required for the report.
+
+\vspace{1em}
+\noindent \textbf{Note:} To generate a fully self-contained version with all code embedded (no \texttt{lstinputlisting}), or to include more ROS files / all poses, reply with specific instructions. The current setup prioritizes practicality for a printed report while satisfying the requirement of having all project code available in one LaTeX reference document. 
+
+The modified \texttt{src/main_board/main.cpp} is fully captured above.
+
+% End of appendix content. Do NOT include \end{document} if you \input this file into a larger report.

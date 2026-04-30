@@ -1,0 +1,162 @@
+\subsection{Application and User Interface Functionality}
+\label{subsec:application-ui-functionality}
+
+The ME424 robot application provides a browser-based operator interface that connects to the main controller over Wi-Fi and supports both low-level actuator control and higher-level task execution. At runtime, the firmware serves a web interface from onboard flash storage (LittleFS), accepts commands through WebSocket/TCP channels, and relays status from both the motion controller and the sensor/tool subsystem. This design gives users a single interface for motion, homing, tooling, safety control, and system diagnostics.
+
+\subsubsection{Overall UI Structure and Operator Workflow}
+
+The UI is organized to support a practical workflow:
+\begin{enumerate}
+  \item Connect to the robot over the network and confirm communication.
+  \item Inspect robot state (positions, limits, and tool status).
+  \item Home required stages to establish a known reference.
+  \item Execute manual jog commands or synchronized/queued routines.
+  \item Enable or disable end-effector tools as needed.
+  \item Monitor acknowledgements, errors, and safety events in real time.
+\end{enumerate}
+
+In normal operation, the interface acts as a command console with structured controls, while the firmware enforces hardware safety constraints (limit blocking and e-stop latching) in the background.
+
+\begin{figure}[htbp]
+  \centering
+  % Replace the file name with your screenshot path
+  \includegraphics[width=0.95\linewidth]{figures/ui-overview.png}
+  \caption{Main web UI overview, showing command controls, status panels, and live output.}
+  \label{fig:ui-overview}
+\end{figure}
+
+\subsubsection{Connection, Session Feedback, and Live Communication}
+
+When loaded in a browser, the UI establishes a live command/status channel to the main board (WebSocket on port 81, with TCP command support on port 3333). The interface should indicate connection state and then begin displaying streamed acknowledgements and state lines. Typical operator-visible feedback includes:
+\begin{itemize}
+  \item \texttt{ACK ...} messages confirming accepted commands,
+  \item \texttt{DONE ...} messages when motions complete,
+  \item \texttt{ERR ...} messages for malformed or invalid requests,
+  \item limit and sensor reports relayed from the sensor board,
+  \item emergency-stop state transitions (\texttt{ESTOP LATCHED/CLEARED}).
+\end{itemize}
+
+This continuous feedback loop is critical: users should interpret the UI as a command-and-confirm system rather than a fire-and-forget interface.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/ui-connection-status.png}
+  \caption{Connection and live status area showing command acknowledgements and device responses.}
+  \label{fig:ui-connection-status}
+\end{figure}
+
+\subsubsection{Manual Motion Controls and Direct Interaction}
+
+The interface supports direct motion through stage-based controls and raw controller commands:
+\begin{itemize}
+  \item Stage commands (\texttt{s1cw}, \texttt{s2up}, \texttt{s3down}, etc.) provide semantically meaningful robot actions.
+  \item Raw controller commands (\texttt{cXf}/\texttt{cXr}) expose per-driver step control for debugging and calibration.
+  \item Adjustable speed/timing parameters allow users to tune responsiveness and smoothness.
+\end{itemize}
+
+User interaction is typically button-driven (for common motions) or text-command-driven (for advanced commands). The system validates step counts and rejects invalid values. During motion, the firmware monitors limits and e-stop state every cycle; if a stop condition is encountered, motion is aborted and the event is reported back to the UI.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/ui-manual-motion.png}
+  \caption{Manual motion controls for stage-level and controller-level movement commands.}
+  \label{fig:ui-manual-motion}
+\end{figure}
+
+\subsubsection{Homing and Coordinate Management Features}
+
+A key UI feature is guided homing and zero management. The operator can issue homing commands per stage:
+\begin{itemize}
+  \item Stage 1 homes to a clockwise limit reference.
+  \item Stages 2--4 home to mechanical limit switches with direction-aware blocking.
+  \item Stage 5 homes to a Hall-sensor zero region.
+  \item Bounce homing modes improve repeatability by using a two-pass touch strategy.
+\end{itemize}
+
+The application also supports tracked position display (\texttt{where}), direct position overwrite (\texttt{setpos}), and persistent zero-step offsets by stage. This makes the UI suitable for both everyday operation and setup/recalibration sessions.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/ui-homing-and-position.png}
+  \caption{Homing and position-management controls, including zeroing workflow and state readback.}
+  \label{fig:ui-homing-position}
+\end{figure}
+
+\subsubsection{Sequencing, Queues, and Coordinated Task Execution}
+
+Beyond manual control, the UI exposes multiple routine-execution mechanisms:
+\begin{itemize}
+  \item \textbf{Sequential execution} (\texttt{seq}): runs a comma-separated list of commands in order.
+  \item \textbf{Parallel execution} (\texttt{par}): runs supported motor commands simultaneously.
+  \item \textbf{Synchronized absolute motion} (\texttt{syncabs}): executes multi-axis targets with speed and ramp limits.
+  \item \textbf{Queue manager}: supports \texttt{qadd pose}, \texttt{qadd delay}, \texttt{qadd cmd}, \texttt{qlist}, \texttt{qrun}, \texttt{qstop}, and \texttt{qclear}.
+\end{itemize}
+
+From a user perspective, this enables a progression from manual jogs to repeatable scripted workflows. The queue panel should be documented with expected operator steps: construct queue, verify items, execute, monitor logs, and stop/clear if needed.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/ui-queue-and-routines.png}
+  \caption{Queue and routine execution controls for repeatable multi-step operation.}
+  \label{fig:ui-queue-routines}
+\end{figure}
+
+\subsubsection{Tooling Panel and End-Effector Interaction}
+
+The UI includes dedicated controls for end-effector tooling:
+\begin{itemize}
+  \item magnet control (\texttt{MAG ON/OFF}),
+  \item vacuum control (\texttt{VAC ON/OFF}),
+  \item saw enable/disable (\texttt{SAW ON/OFF}),
+  \item saw speed command (\texttt{SAW SPEED x}),
+  \item global tool shutdown (\texttt{ALL OFF}),
+  \item tool telemetry query (\texttt{MSTATUS}).
+\end{itemize}
+
+Returned tool telemetry includes actuator states, saw speed setpoint, identified tool resistor class, and compression/probe displacement estimate. This gives users immediate confirmation that the expected attachment is detected and that commanded tool states are active.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\linewidth]{figures/ui-tooling-panel.png}
+  \caption{Tooling controls and status readback for magnet, vacuum, and saw subsystems.}
+  \label{fig:ui-tooling-panel}
+\end{figure}
+
+\subsubsection{Safety, Fault Handling, and Operator Responsibilities}
+
+The UI exposes safety commands directly, but safety enforcement is implemented in firmware:
+\begin{itemize}
+  \item Emergency stop can be latched from serial or network sources.
+  \item While latched, all commanded motion is blocked.
+  \item Tool outputs are forced off on e-stop latch via \texttt{ALL OFF}.
+  \item Limit-switch and Hall-derived states are continuously integrated into command blocking logic.
+\end{itemize}
+
+Recommended user interaction pattern:
+\begin{enumerate}
+  \item Before motion: check limit and e-stop status.
+  \item During motion: watch live acknowledgements and stop on unexpected behavior.
+  \item Before tool activation: verify tool identification/status panel.
+  \item After operation: use \texttt{ALL OFF} and confirm final system state.
+\end{enumerate}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/ui-safety-status.png}
+  \caption{Safety and fault status region with e-stop state and limit feedback.}
+  \label{fig:ui-safety-status}
+\end{figure}
+
+\subsubsection{How to Integrate This Section in a Report}
+
+This file is intended to be included from a larger report using:
+\begin{verbatim}
+\input{docs/application_ui_subsection.tex}
+\end{verbatim}
+
+To compile successfully, ensure your preamble includes:
+\begin{verbatim}
+\usepackage{graphicx}
+\end{verbatim}
+
+Then add the corresponding screenshot image files under a directory such as \texttt{figures/}, matching the filenames used in the \texttt{\textbackslash includegraphics} commands.

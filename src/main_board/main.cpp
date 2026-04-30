@@ -1083,6 +1083,16 @@ static void homeStartTimer() {
 // Bounce homing (`home sN bounce`): fast approach, back off, slow final creep, then zero.
 static const int HOME_BOUNCE_BACKOFF_STEPS = 260;
 static const int HOME_BOUNCE_SLOW_CHUNK = 8;
+// Stronger retreat for bounce homing (S1-S4), then slow re-touch.
+static const int HOME_BOUNCE_BACKOFF_STEPS_S1 = 900;
+static const int HOME_BOUNCE_BACKOFF_STEPS_S2 = 900;
+static const int HOME_BOUNCE_BACKOFF_STEPS_S34 = 900;
+static const int HOME_BOUNCE_SLOW_CHUNK_S34 = 4;
+// Enforce a minimum retreat before second-touch, even if caller backoff changes.
+static const int HOME_BOUNCE_MANDATORY_MIN_RETREAT_STEPS = 900;
+static const unsigned long HOME_BOUNCE_RELEASE_WAIT_MS = 200UL;
+static const int HOME_BOUNCE_RELEASE_EXTRA_STEPS = 80;
+static const int HOME_BOUNCE_RELEASE_ATTEMPTS = 10;
 
 static int homeBounceSlowPulseUs(int saved) {
   return min(max(saved * 5, saved + 800), 14000);
@@ -1338,9 +1348,11 @@ bool homeStage4ToLimit() {
  * so the second-touch creep is a real re-contact, not an immediate no-op.
  */
 static bool ensureStageLimitReleasedForBounce(int stageIdx, volatile bool &limitHit, const char *tag) {
-  for (int attempt = 0; attempt < 6; attempt++) {
+  for (int attempt = 0; attempt < HOME_BOUNCE_RELEASE_ATTEMPTS; attempt++) {
+    // Ask the sensor board for an immediate LIM refresh instead of waiting for only edge-driven updates.
+    SensorSerial.println("STATUS");
     unsigned long t0 = millis();
-    while (millis() - t0 < 120UL) {
+    while (millis() - t0 < HOME_BOUNCE_RELEASE_WAIT_MS) {
       pollEmergencyInputs();
       serviceSensorUART();
       if (estopLatched) return false;
@@ -1351,12 +1363,24 @@ static bool ensureStageLimitReleasedForBounce(int stageIdx, volatile bool &limit
     // Still active after waiting: nudge farther away from the limit.
     bool ok = false;
     if (stageIdx == STAGE3 || stageIdx == STAGE4) {
-      ok = stepMotor(stageIdx, false, 36);
+      ok = stepMotor(stageIdx, false, HOME_BOUNCE_RELEASE_EXTRA_STEPS);
     }
     if (!ok) return false;
   }
   printlnDebug(String(tag) + " bounce: limit stayed active after backoff");
   return !limitHit;
+}
+
+static bool enforceBounceMinimumRetreat(int stageIdx, int alreadyRetreated) {
+  int extra = HOME_BOUNCE_MANDATORY_MIN_RETREAT_STEPS - alreadyRetreated;
+  if (extra <= 0) return true;
+  if (stageIdx == STAGE1 || stageIdx == STAGE3 || stageIdx == STAGE4) {
+    return stepMotor(stageIdx, false, extra);
+  }
+  if (stageIdx == STAGE2_RIGHT) {
+    return stepStage2(true, extra);
+  }
+  return true;
 }
 
 bool homeStage1ToLimitBounce() {
@@ -1370,8 +1394,13 @@ bool homeStage1ToLimitBounce() {
   }
   pulseDelayUs = saved;
   if (estopLatched) return false;
-  if (!stepMotor(STAGE1, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  if (!stepMotor(STAGE1, false, HOME_BOUNCE_BACKOFF_STEPS_S1)) return false;
+  if (!enforceBounceMinimumRetreat(STAGE1, HOME_BOUNCE_BACKOFF_STEPS_S1)) return false;
   serviceSensorUART();
+  if (!ensureStageLimitReleasedForBounce(STAGE1, stage1CWLimitHit, "HOME S1")) {
+    pulseDelayUs = saved;
+    return false;
+  }
   pulseDelayUs = homeS1BounceSlowPulseUs(saved);
   if (!homeStage1SeekCWNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
     pulseDelayUs = saved;
@@ -1401,8 +1430,13 @@ bool homeStage2ToLimitBounce() {
   }
   pulseDelayUs = saved;
   if (estopLatched) return false;
-  if (!stepStage2(true, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  if (!stepStage2(true, HOME_BOUNCE_BACKOFF_STEPS_S2)) return false;
+  if (!enforceBounceMinimumRetreat(STAGE2_RIGHT, HOME_BOUNCE_BACKOFF_STEPS_S2)) return false;
   serviceSensorUART();
+  if (!ensureStageLimitReleasedForBounce(STAGE2_RIGHT, stage2LimitHit, "HOME S2")) {
+    pulseDelayUs = saved;
+    return false;
+  }
   pulseDelayUs = homeBounceSlowPulseUs(saved);
   if (!homeStage2SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
     pulseDelayUs = saved;
@@ -1433,14 +1467,15 @@ bool homeStage3ToLimitBounce() {
   }
   pulseDelayUs = saved;
   if (estopLatched) return false;
-  if (!stepMotor(STAGE3, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  if (!stepMotor(STAGE3, false, HOME_BOUNCE_BACKOFF_STEPS_S34)) return false;
+  if (!enforceBounceMinimumRetreat(STAGE3, HOME_BOUNCE_BACKOFF_STEPS_S34)) return false;
   serviceSensorUART();
   if (!ensureStageLimitReleasedForBounce(STAGE3, stage3LimitHit, "HOME S3")) {
     pulseDelayUs = saved;
     return false;
   }
   pulseDelayUs = homeBounceSlowPulseUs(saved);
-  if (!homeStage3SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
+  if (!homeStage3SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK_S34)) {
     pulseDelayUs = saved;
     return false;
   }
@@ -1468,14 +1503,15 @@ bool homeStage4ToLimitBounce() {
   }
   pulseDelayUs = saved;
   if (estopLatched) return false;
-  if (!stepMotor(STAGE4, false, HOME_BOUNCE_BACKOFF_STEPS)) return false;
+  if (!stepMotor(STAGE4, false, HOME_BOUNCE_BACKOFF_STEPS_S34)) return false;
+  if (!enforceBounceMinimumRetreat(STAGE4, HOME_BOUNCE_BACKOFF_STEPS_S34)) return false;
   serviceSensorUART();
   if (!ensureStageLimitReleasedForBounce(STAGE4, stage4LimitHit, "HOME S4")) {
     pulseDelayUs = saved;
     return false;
   }
   pulseDelayUs = homeBounceSlowPulseUs(saved);
-  if (!homeStage4SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK)) {
+  if (!homeStage4SeekDownNoZero(HOME_BOUNCE_SLOW_CHUNK_S34)) {
     pulseDelayUs = saved;
     return false;
   }

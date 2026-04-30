@@ -1,0 +1,115 @@
+% =====================================================
+% ME424 Robot - SIMPLE LANDSCAPE + SIDE-BY-SIDE APPENDIX
+% =====================================================
+% 
+% Add to the VERY FIRST LINE of main.tex:
+% \UseRawInputEncoding
+% 
+% Add to preamble:
+% \usepackage{pdflscape}
+% \usepackage{multicol}
+% \usepackage{verbatim}
+% \usepackage{xcolor}
+% \usepackage{hyperref}
+% 
+% Usage in main.tex:
+% \appendix
+% \input{code/docs/code_appendix_simple.tex}
+% 
+% This is the simple robust version (verbatiminput) with landscape, 2-column layout, 
+% tighter \scriptsize font and minimal spacing.
+
+\begin{landscape}
+\section*{Appendix: Complete Project Source Code}
+\label{app:full-source}
+\addcontentsline{toc}{section}{Appendix: Complete Project Source Code}
+
+This appendix contains all custom project code in landscape 2-column format with tight spacing. Only project-specific files are included.
+
+\vspace{0.5em}
+\begin{multicols}{2}
+
+\subsection*{Firmware - Main Board}
+
+\textbf{File: \texttt{code/src/main\_board/main.cpp} (Primary)}
+
+\verbatiminput{code/src/main_board/main.cpp}
+
+\textbf{File: \texttt{code/main\_board/main\_board.ino} (Legacy)}
+
+\verbatiminput{code/main_board/main_board.ino}
+
+\subsection*{Firmware - Sensor Board}
+
+\textbf{File: \texttt{code/sensor\_board/sensor\_board.ino}}
+
+\verbatiminput{code/sensor_board/sensor_board.ino}
+
+\textbf{File: \texttt{code/src/sensor\_board/main.cpp}}
+
+\verbatiminput{code/src/sensor_board/main.cpp}
+
+\subsection*{Firmware - MOSFET/Tool Board}
+
+\textbf{File: \texttt{code/src/mosfet\_board/main.cpp}}
+
+\verbatiminput{code/src/mosfet_board/main.cpp}
+
+\textbf{File: \texttt{code/mosfet\_board/mosfet\_board.ino}}
+
+\verbatiminput{code/mosfet_board/mosfet_board.ino}
+
+\subsection*{Web Interface}
+
+\textbf{File: \texttt{code/app/app.js} (Main UI)}
+
+\verbatiminput{code/app/app.js}
+
+\textbf{File: \texttt{code/data/app.js}}
+
+\verbatiminput{code/data/app.js}
+
+\end{multicols}
+
+\begin{multicols}{2}
+
+\subsection*{Configuration \& Docs}
+
+\textbf{File: \texttt{code/platformio.ini}}
+
+\verbatiminput{code/platformio.ini}
+
+\textbf{File: \texttt{code/README.md}}
+
+\verbatiminput{code/README.md}
+
+\textbf{File: \texttt{code/wokwi/diagram.json}}
+
+\verbatiminput{code/wokwi/diagram.json}
+
+\textbf{File: \texttt{code/docs/application_ui_subsection.tex}}
+
+\verbatiminput{code/docs/application_ui_subsection.tex}
+
+\subsection*{ROS/Python \& Pose Example}
+
+\textbf{File: \texttt{code/ros-py/serial_bridge.py}}
+
+\verbatiminput{code/ros-py/serial_bridge.py}
+
+\textbf{File: \texttt{code/ros-py/ros_src.py}}
+
+\verbatiminput{code/ros-py/ros_src.py}
+
+\textbf{File: \texttt{code/poses/me424-homing.json} (Example)}
+
+\verbatiminput{code/poses/me424-homing.json}
+
+\end{multicols}
+
+\vspace{1em}
+\noindent \textbf{Note:} This is the stable simple version. If any file says "not found", check the exact path in Overleaf or comment out the line with \%. 
+
+To reference this appendix: `\ref{app:full-source}` or `\autoref{app:full-source}`.
+
+\end{landscape}
